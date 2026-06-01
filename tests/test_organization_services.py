@@ -52,6 +52,25 @@ def test_scan_images_ignores_hidden_directories(tmp_path: Path) -> None:
     assert BatchFileOrganizer.scan_images(source) == [nested / "used.NEF"]
 
 
+def test_scan_images_ignores_hidden_files(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    hidden = source / ".ignored.jpg"
+    visible = source / "used.jpg"
+    hidden.write_text("x", encoding="utf-8")
+    visible.write_text("x", encoding="utf-8")
+
+    assert BatchFileOrganizer.scan_images(source) == [visible]
+
+
+def test_scan_images_ignores_hidden_source_directory(tmp_path: Path) -> None:
+    source = tmp_path / ".source"
+    source.mkdir()
+    (source / "ignored.jpg").write_text("x", encoding="utf-8")
+
+    assert BatchFileOrganizer.scan_images(source) == []
+
+
 def test_scan_images_can_skip_nested_directories(tmp_path: Path) -> None:
     source = tmp_path / "source"
     nested = source / "nested"

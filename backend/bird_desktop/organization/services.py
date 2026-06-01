@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from dataclasses import dataclass
@@ -72,7 +73,7 @@ class BatchFileOrganizer:
         if not source.exists() or not source.is_dir():
             raise ValueError("Source path is not a directory.")
 
-        candidates = source.rglob("*") if recursive else source.iterdir()
+        candidates = BatchFileOrganizer._scan_candidates(source, recursive)
         images = [path for path in candidates if BatchFileOrganizer._is_supported_source_file(path)]
         return sorted(images, key=lambda item: str(item).casefold())
 
@@ -110,10 +111,32 @@ class BatchFileOrganizer:
 
     @staticmethod
     def _is_supported_source_file(path: Path) -> bool:
+        if path.name.startswith("."):
+            return False
+
         if not path.is_file() or path.suffix.lower() not in SUPPORTED_IMAGE_EXTENSIONS:
             return False
 
-        return not any(part.startswith(".") for part in path.parts)
+        return True
+
+
+    @staticmethod
+    def _scan_candidates(source: Path, recursive: bool) -> Iterable[Path]:
+        if source.name.startswith("."):
+            return iter(())
+
+        if not recursive:
+            return (path for path in source.iterdir() if not path.name.startswith("."))
+
+        def walk() -> Iterable[Path]:
+            for root, directory_names, file_names in os.walk(source):
+                directory_names[:] = [name for name in directory_names if not name.startswith(".")]
+                root_path = Path(root)
+                for file_name in file_names:
+                    if not file_name.startswith("."):
+                        yield root_path / file_name
+
+        return walk()
 
 
     @staticmethod

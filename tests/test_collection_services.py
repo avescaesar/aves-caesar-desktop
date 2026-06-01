@@ -20,6 +20,28 @@ def test_collection_scan_is_recursive(tmp_path: Path) -> None:
     assert CollectionScanner.scan_images(source) == [nested / "nested.jpg", source / "root.jpg"]
 
 
+def test_collection_scan_ignores_hidden_files_and_directories(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    hidden_directory = source / ".hidden"
+    nested = source / "nested"
+    hidden_directory.mkdir(parents=True)
+    nested.mkdir()
+    (hidden_directory / "ignored.jpg").write_text("x", encoding="utf-8")
+    (source / ".ignored.NEF").write_text("x", encoding="utf-8")
+    used = nested / "used.jpg"
+    used.write_text("x", encoding="utf-8")
+
+    assert CollectionScanner.scan_images(source) == [used]
+
+
+def test_collection_scan_ignores_hidden_source_directory(tmp_path: Path) -> None:
+    source = tmp_path / ".source"
+    source.mkdir()
+    (source / "ignored.jpg").write_text("x", encoding="utf-8")
+
+    assert CollectionScanner.scan_images(source) == []
+
+
 def test_collection_scan_filters_by_scan_mode(tmp_path: Path) -> None:
     source = tmp_path / "source"
     source.mkdir()
