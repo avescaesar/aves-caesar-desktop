@@ -80,6 +80,8 @@ class ModelMetadata:
         return {
             "speciesTop1Percent": self._float(value.get("species_top1_percent")),
             "speciesTop5Percent": self._float(value.get("species_top5_percent")),
+            "familyTop1Percent": self._float(value.get("family_top1_percent")),
+            "speciesF1Percent": self._float(value.get("species_f1_percent")),
         }
 
 

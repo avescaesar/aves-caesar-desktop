@@ -113,6 +113,14 @@ jobs:
       - name: Build Windows installer
         run: python scripts/packaging/package.py --platform windows --install --version $env:RELEASE_VERSION
 
+      - name: Generate release manifest
+        run: |
+          $artifacts = @(Get-ChildItem -Path "dist/installer" -Filter "AvesCaesarSetup-$env:RELEASE_VERSION-x64.exe")
+          if ($artifacts.Count -ne 1) {
+            throw "Expected one installer artifact for $env:RELEASE_VERSION, found $($artifacts.Count)."
+          }
+          python scripts/packaging/write_release_manifest.py --installer $artifacts[0].FullName --version $env:RELEASE_VERSION --tag $env:TAG_NAME --output version.json
+
       - name: Create draft release notes
         run: |
           $modelVersion = Get-Content -Raw model-version.json | ConvertFrom-Json
@@ -126,9 +134,10 @@ jobs:
 
       - name: Create GitHub release
         run: |
-          $artifacts = Get-ChildItem -Path "dist/installer" -Filter "*.exe" | ForEach-Object { $_.FullName }
-          if (-not $artifacts) {
+          $artifacts = @(Get-ChildItem -Path "dist/installer" -Filter "*.exe" | ForEach-Object { $_.FullName })
+          if ($artifacts.Count -lt 1) {
             throw "No installer artifact found in dist/installer."
           }
+          $artifacts += (Resolve-Path "version.json").Path
           $arguments = @("release", "create", $env:TAG_NAME) + $artifacts + @("--target", $env:GITHUB_SHA, "--title", $env:TAG_NAME, "--notes-file", "release-notes.md", "--draft")
           gh @arguments

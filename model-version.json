@@ -1,6 +1,6 @@
 {
   "repository": "avescaesar/bird-detect-classify",
-  "revision": "7a957a1208b5b59cb57663cef390ea4f2386e094",
+  "revision": "f9b2159306029fbaa8f6c9a7799776b422278ea2",
   "files": [
     "bird_detector.onnx",
     "bird_classifier.onnx",

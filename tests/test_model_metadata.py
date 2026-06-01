@@ -14,7 +14,7 @@ def test_model_metadata_reads_classifier_performance(monkeypatch: pytest.MonkeyP
     classifier_model = tmp_path / "bird_classifier.onnx"
     classifier_model.write_text("model", encoding="utf-8")
     performance_path = tmp_path / "model_performance.json"
-    performance_path.write_text(json.dumps({"classification_model": {"evaluation": {"with_gps": {"species_top1_percent": 94.1, "species_top5_percent": 98.82}, "without_gps": {"species_top1_percent": 85.69, "species_top5_percent": 96.77}}}}), encoding="utf-8")
+    performance_path.write_text(json.dumps({"classification_model": {"evaluation": {"with_gps": {"species_top1_percent": 94.1, "species_top5_percent": 98.82, "family_top1_percent": 99.05, "species_f1_percent": 91.2}, "without_gps": {"species_top1_percent": 85.69, "species_top5_percent": 96.77, "family_top1_percent": 98.21, "species_f1_percent": 78.4}}}}), encoding="utf-8")
     monkeypatch.setattr(AppPaths, "app_root", staticmethod(lambda: tmp_path))
     monkeypatch.setattr(AppPaths, "models_dir", staticmethod(lambda: tmp_path))
     config = RuntimeConfig(detector_model=tmp_path / "bird_detector.onnx", classifier_model=classifier_model, labels_path=tmp_path / "species_mapping_v2.csv")
@@ -23,8 +23,8 @@ def test_model_metadata_reads_classifier_performance(monkeypatch: pytest.MonkeyP
 
     assert details["appExecutableDate"] is None
     assert details["classifierModelPerformance"] == {
-        "withGps": {"speciesTop1Percent": 94.1, "speciesTop5Percent": 98.82},
-        "withoutGps": {"speciesTop1Percent": 85.69, "speciesTop5Percent": 96.77},
+        "withGps": {"speciesTop1Percent": 94.1, "speciesTop5Percent": 98.82, "familyTop1Percent": 99.05, "speciesF1Percent": 91.2},
+        "withoutGps": {"speciesTop1Percent": 85.69, "speciesTop5Percent": 96.77, "familyTop1Percent": 98.21, "speciesF1Percent": 78.4},
     }
 
 

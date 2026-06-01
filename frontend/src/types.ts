@@ -72,6 +72,8 @@ export enum ActiveView {
 
 
 export type ModelPerformanceBlock = {
+	familyTop1Percent: number;
+	speciesF1Percent: number;
 	speciesTop1Percent: number;
 	speciesTop5Percent: number;
 };
