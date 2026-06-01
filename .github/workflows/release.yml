@@ -1,0 +1,134 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Release version to build, for example 1.2.3. Leave empty to increment the latest release patch version.
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  create-release:
+    name: Create GitHub release
+    runs-on: windows-latest
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-windows.txt
+          python -m pip install -e ".[dev]"
+
+      - name: Typecheck frontend
+        run: npm run typecheck
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Run backend tests
+        run: python -m pytest
+
+      - name: Resolve release tag
+        run: |
+          function Normalize-Version([string]$value) {
+            $normalized = $value.Trim()
+            if ($normalized.StartsWith("v")) {
+              $normalized = $normalized.Substring(1)
+            }
+            if ($normalized -notmatch '^\d+\.\d+\.\d+$') {
+              throw "Release version must be X.Y.Z or vX.Y.Z. Got: $value"
+            }
+            return $normalized
+          }
+
+          function Increment-Patch-Version([string]$value) {
+            $normalized = Normalize-Version $value
+            $parts = $normalized.Split(".")
+            return "$($parts[0]).$($parts[1]).$([int]$parts[2] + 1)"
+          }
+
+          $inputVersion = "${{ github.event.inputs.release_version }}"
+          $refType = "${{ github.ref_type }}"
+          $refName = "${{ github.ref_name }}"
+
+          if ($refType -eq "tag") {
+            $releaseVersion = Normalize-Version $refName
+          } elseif (-not [string]::IsNullOrWhiteSpace($inputVersion)) {
+            $releaseVersion = Normalize-Version $inputVersion
+          } else {
+            $latestTag = gh release view --json tagName --jq ".tagName" 2>$null
+            if ($LASTEXITCODE -ne 0) {
+              $latestTag = ""
+            }
+            if ([string]::IsNullOrWhiteSpace($latestTag)) {
+              $latestTag = git tag --list "v*" --sort=-v:refname | Select-Object -First 1
+            }
+            if ([string]::IsNullOrWhiteSpace($latestTag)) {
+              throw "No previous release or v* tag found. Provide release_version manually."
+            }
+            $releaseVersion = Increment-Patch-Version $latestTag
+          }
+
+          $tagName = "v$releaseVersion"
+          "TAG_NAME=$tagName" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "RELEASE_VERSION=$releaseVersion" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Download release models
+        run: python scripts/models/download_release_models.py
+
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+
+      - name: Build Windows installer
+        run: python scripts/packaging/package.py --platform windows --install --version $env:RELEASE_VERSION
+
+      - name: Create draft release notes
+        run: |
+          $modelVersion = Get-Content -Raw model-version.json | ConvertFrom-Json
+          @(
+            "Release $env:TAG_NAME"
+            ""
+            "Model bundle:"
+            "- Hugging Face: https://huggingface.co/$($modelVersion.repository)"
+            "- Revision: $($modelVersion.revision)"
+          ) | Set-Content -Path release-notes.md -Encoding utf8
+
+      - name: Create GitHub release
+        run: |
+          $artifacts = Get-ChildItem -Path "dist/installer" -Filter "*.exe" | ForEach-Object { $_.FullName }
+          if (-not $artifacts) {
+            throw "No installer artifact found in dist/installer."
+          }
+          $arguments = @("release", "create", $env:TAG_NAME) + $artifacts + @("--target", $env:GITHUB_SHA, "--title", $env:TAG_NAME, "--notes-file", "release-notes.md", "--draft")
+          gh @arguments

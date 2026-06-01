@@ -1,0 +1,88 @@
+.lightroom-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  padding: 22px;
+}
+
+.lightroom-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  max-width: 980px;
+}
+
+.lightroom-panel {
+  background: #ffffff;
+  border: 1px solid #c4ccd3;
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+
+  h3 {
+    color: #002638;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0;
+    margin: 0;
+    text-transform: uppercase;
+  }
+
+  p {
+    color: #51616c;
+    font-size: 11px;
+    line-height: 1.35;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.lightroom-status strong {
+  color: #002638;
+  font-size: 14px;
+}
+
+.lightroom-versions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+
+  div {
+    border-left: 3px solid #3f7d92;
+    display: grid;
+    gap: 3px;
+    padding-left: 10px;
+  }
+
+  span {
+    color: #51616c;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  strong {
+    color: #002638;
+    font-size: 13px;
+  }
+}
+
+.lightroom-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+
+  .toolbar-button,
+  .secondary-action {
+    flex: 0 0 auto;
+  }
+}
+
+.lightroom-message {
+  color: #002638;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 18px 0 0;
+}

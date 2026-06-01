@@ -1,0 +1,22 @@
+THIRD-PARTY NOTICES
+
+Aves Caesar includes third-party open-source components and runtime libraries through its Python backend, packaged Windows runtime, frontend build output, and bundled metadata tooling.
+
+Each third-party component remains licensed under its own license terms. Those licenses are not changed by the Aves Caesar application source license.
+
+Major runtime or build components may include:
+- Python
+- PyInstaller
+- pywebview
+- ONNX Runtime DirectML
+- NumPy
+- Pillow
+- pillow-heif
+- gpxpy
+- ExifTool
+- Vite
+- TypeScript
+- Sass
+- Babel and related frontend build dependencies
+
+This notice is informational and is not legal advice. Review the upstream third-party projects for their authoritative license terms.

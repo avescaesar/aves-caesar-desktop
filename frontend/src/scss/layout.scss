@@ -1,0 +1,95 @@
+.app-shell {
+  height: 100vh;
+}
+
+.app-frame {
+  background: #f7f8f9;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.app-header {
+  align-items: center;
+  background: #fbfcfd;
+  border-bottom: 1px solid #c4ccd3;
+  display: flex;
+  height: 56px;
+  justify-content: space-between;
+  padding: 0 20px 0 18px;
+}
+
+.app-logo {
+  display: block;
+  height: 30px;
+  object-fit: contain;
+  width: 30px;
+}
+
+.header-tools {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+}
+
+.update-indicator {
+  align-items: center;
+  background: #eaf6f1;
+  border: 1px solid #76b89a;
+  color: #064b36;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+
+  svg {
+    height: 15px;
+    stroke: currentColor;
+    width: 15px;
+  }
+}
+
+.app-body {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 212px minmax(0, 1fr);
+  min-height: 0;
+}
+
+.section-heading {
+  align-items: center;
+  border-bottom: 1px solid #bfc7cd;
+  display: flex;
+  height: 27px;
+  justify-content: space-between;
+  margin-bottom: 22px;
+
+  h2 {
+    font-size: 16px;
+    line-height: 1;
+    margin: 0;
+  }
+}
+
+.section-title {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.analysis-actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+
+  span {
+    color: #61707a;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+}

@@ -1,0 +1,90 @@
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  align-items: center;
+  border: 1px solid #b9c2c9;
+  border-radius: 2px;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 14px;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.42;
+  }
+}
+
+input,
+select {
+  background: #ffffff;
+  border: 1px solid #b8c2ca;
+  border-radius: 0;
+  color: #002638;
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+svg {
+  fill: none;
+  flex: 0 0 auto;
+  height: 18px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  width: 18px;
+}
+
+.toolbar-actions {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.toolbar-button {
+  background: #eef1f3;
+  color: #6f7c86;
+
+  &.is-primary {
+    background: #00364a;
+    border-color: #00364a;
+    color: #ffffff;
+  }
+}
+
+.secondary-action {
+  background: #f3f5f6;
+  color: #002638;
+  white-space: nowrap;
+}
+
+.icon-button {
+  background: transparent;
+  border: 0;
+  color: #00364a;
+  min-height: 22px;
+  padding: 0;
+
+  svg {
+    height: 15px;
+    width: 15px;
+  }
+}
+
+.header-icon-button {
+  min-height: 28px;
+  width: 28px;
+
+  svg {
+    height: 17px;
+    width: 17px;
+  }
+}

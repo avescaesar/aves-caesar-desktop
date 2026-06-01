@@ -1,0 +1,25 @@
+AVES CAESAR LICENSE NOTICE
+
+This installer contains multiple components licensed under different terms.
+
+1. Aves Caesar
+
+The Aves Caesar application source code, application assets, and pretrained model weights authored for Aves Caesar are licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).
+
+You may use, study, modify, and redistribute these Aves Caesar components under the terms of the AGPL. If you modify the software and make it available to users over a network, you must make the corresponding source code available under the AGPL.
+
+The full AGPL license text is included with this installer and available in the project repository.
+
+2. Third-Party Components
+
+This installer also includes third-party components and runtime libraries, including Python packages, frontend dependencies, ONNX Runtime, ExifTool, and related transitive dependencies.
+
+Those third-party components remain licensed under their own license terms. Their notices and license texts are included under the LICENSES directory.
+
+3. Training Data
+
+Raw training images are not included or redistributed with this software.
+
+4. Disclaimer
+
+The software and pretrained weights are provided "as is", without warranty of any kind.

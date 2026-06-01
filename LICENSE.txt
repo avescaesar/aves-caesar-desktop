@@ -1,0 +1,10 @@
+Aves Caesar is licensed under the GNU Affero General Public License v3.0 or later.
+
+The application source code, application assets, and pretrained model weights authored for Aves Caesar are licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).
+
+Third-party components remain under their own license terms.
+
+See:
+- LICENSES/AGPL-3.0-or-later.txt
+- LICENSES/THIRD-PARTY-NOTICES.txt
+- LICENSES/DATA-SOURCES-NOTICE.txt

@@ -1,0 +1,11 @@
+{
+  "repository": "avescaesar/bird-detect-classify",
+  "revision": "7a957a1208b5b59cb57663cef390ea4f2386e094",
+  "files": [
+    "bird_detector.onnx",
+    "bird_classifier.onnx",
+    "bird_classifier.onnx.data",
+    "species_mapping_v2.csv",
+    "model_performance.json"
+  ]
+}

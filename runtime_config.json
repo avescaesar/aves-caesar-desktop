@@ -1,0 +1,13 @@
+{
+  "detector_model": "bird_detector.onnx",
+  "classifier_model": "bird_classifier.onnx",
+  "labels_path": "species_mapping_v2.csv",
+  "detection_threshold": 0.7,
+  "classification_top_k": 5,
+  "low_confidence_threshold": 0.5,
+  "min_classification_confidence": 0.01,
+  "crop_size": 224,
+  "detector_batch_size": 4,
+  "classifier_batch_size": 32,
+  "provider_preference": "directml"
+}

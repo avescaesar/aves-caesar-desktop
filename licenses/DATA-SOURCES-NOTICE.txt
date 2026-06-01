@@ -1,0 +1,11 @@
+DATA SOURCES NOTICE
+
+The pretrained model weights were trained on mixed-source bird image data.
+
+Training sources may include:
+- LaSBiRD: Large Scale Bird Recognition Dataset, IEEE DataPort, DOI: 10.21227/s3xd-2s66
+- iNaturalist media, used according to their applicable licenses and restrictions
+- eBird/Clements taxonomy as a taxonomic reference only
+
+No raw training images are included or redistributed with this software.
+No eBird or Macaulay Library media are included in the training data unless explicitly stated otherwise.

@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bird-desktop"
+dynamic = ["version"]
+description = "Desktop bird detection and classification app"
+license = { text = "AGPL-3.0-or-later" }
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "Pillow>=10.0",
+    "pillow-heif>=0.20",
+    "pywebview>=5.0",
+    "gpxpy>=1.6",
+]
+
+[project.optional-dependencies]
+windows = ["onnxruntime-directml>=1.19"]
+macos = ["onnxruntime>=1.19"]
+cpu = ["onnxruntime>=1.19"]
+dev = ["pyinstaller>=6.0", "pytest>=8.0"]
+
+[tool.setuptools]
+package-dir = {"" = "backend"}
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+
+[tool.setuptools.dynamic]
+version = {attr = "bird_desktop.__version__"}
+
+[tool.setuptools.package-data]
+"bird_desktop.lightroom.lua" = ["*.lua"]
