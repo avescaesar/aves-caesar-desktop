@@ -9,7 +9,7 @@
 
 **Aves Caesar** is a free and open source desktop app for identifying birds in your photos, browsing photo collections, organizing images by species, and adding species keywords in Lightroom Classic.
 
-The app runs bird detection and classification locally on your computer with ONNX models. Your photos are not sent to a cloud service for identification.
+The app runs bird detection and classification locally on your computer with its custom trained AI models. Your photos are not sent to a cloud service for identification.
 
 - Website: [www.aves-caesar.com](https://www.aves-caesar.com)
 - License: [AGPL-3.0-or-later](LICENSE.txt)
@@ -20,7 +20,7 @@ The app runs bird detection and classification locally on your computer with ONN
 - Detection of multiple birds in the same photo, followed by separate classification of each detected area.
 - Readable results with species name, scientific name, confidence score, and plausible alternatives.
 - Optional use of GPS coordinates, capture date, and GPX tracks.
-- Manual corrections saved locally.
+- Manual corrections.
 - Full photo collection scanning with cached predictions and thumbnails.
 - Automatic organization by species, by copying files into a destination folder.
 - Lightroom Classic plugin for applying hierarchical `Aves Caesar > species` keywords.
@@ -36,10 +36,10 @@ The app runs bird detection and classification locally on your computer with ONN
 
 GPS coordinates help the app choose between visually similar species. Without GPS, Aves Caesar relies on the image alone and still performs well.
 
-| Context | Species top-1 | Species top-5 | Family |
-| --- | ---: | ---: | ---: |
-| With GPS | 95.46% | 99.09% | 99.27% |
-| Without GPS | 89.78% | 97.56% | 98.86% |
+| Context | Species top-1 | Species top-5 | Species F1 | Family |
+| --- | ---: | ---: | ---: | ---: |
+| With GPS | 95.94% | 99.17% | 91.86% | 99.33% |
+| Without GPS | 91.48% | 97.84% | 78.43% | 99.04% |
 
 These figures come from internal tests on 100s of thousands of pictures.
 
@@ -47,8 +47,8 @@ These figures come from internal tests on 100s of thousands of pictures.
 
 Aves Caesar is built to run locally:
 
-- ONNX models run on your machine;
-- photos are not sent to the Internet for identification;
+- AI models run on your machine (whether you have a GPU or not);
+- No photos or data are sent to the Internet, period.
 
 ## Supported Formats
 
@@ -81,7 +81,7 @@ npm start
 ## Model Files
 
 Model files are not versioned in this repository. Development runs load models from `models/`.
-Release builds read [model-version.json](model-version.json), download the configured Hugging Face revision, and stage the bundle in `resources/models/` before packaging.
+Release builds read [model-version.json](model-version.json), download the configured revision from the [Aves Caesar model repository on Hugging Face](https://huggingface.co/avescaesar/bird-detect-classify), and stage the bundle in `resources/models/` before packaging.
 
 To run predictions locally, place these files in `models/`:
 
@@ -103,11 +103,6 @@ The script writes `resources/models/model-build-info.json`, which the installed 
 
 Runtime settings are stored in [runtime_config.json](runtime_config.json) at the repository root.
 
-Important settings:
-
-- `provider_preference`: `auto`, `directml`, `coreml`, or `cpu`.
-- `detector_batch_size`: number of full images sent to the detector in batch workflows.
-- `classifier_batch_size`: number of detected crops sent to the classifier in batch workflows.
 
 ## Lightroom Classic
 
@@ -144,30 +139,8 @@ Build the Windows app and installer:
 
 The first command produces the PyInstaller app in `dist/AvesCaesar`. The second also generates the Inno Setup installer in `dist/installer`.
 
-macOS packaging must be run on macOS:
-
-```bash
-python scripts/packaging/package.py --platform macos
-```
-
 Before packaging, run `scripts\models\download_release_models.py` so `resources/models/` contains the release model files and `model-build-info.json`.
 
-The packaging script prepares ExifTool, includes required resources, and increments the patch version in `package.json`, `package-lock.json`, and `backend/bird_desktop/__init__.py`.
-
-## Ignored Local Data
-
-These directories contain development files, cache data, build output, or external binaries. They should not be committed:
-
-```text
-models/
-resources/exiftool/
-resources/models/
-frontend/dist/
-build/
-dist/
-logs/
-cache/
-```
 
 ## License
 
