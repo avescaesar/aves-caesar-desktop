@@ -27,7 +27,8 @@ def test_lightroom_plugin_generation_creates_expected_files(tmp_path: Path) -> N
     assert "function Aves.openPanel()" in plugin_lua
     assert "Tag selected photos" in plugin_lua
     assert "Reprocess" in plugin_lua
-    assert "PLUGIN_VERSION = '1.0.20'" in plugin_lua
+    assert "PLUGIN_VERSION = '1.0.21'" in plugin_lua
+    assert "{ title = 'Español', value = 'es' }" in plugin_lua
     assert "Confidence threshold" not in plugin_lua
     assert "properties.threshold" not in plugin_lua
     assert "threshold = options.threshold" not in plugin_lua
@@ -93,8 +94,8 @@ def test_lightroom_plugin_info_reports_installed_and_available_versions(monkeypa
 
     assert info["installed"] is True
     assert "installPath" not in info
-    assert info["installedVersion"] == "1.0.20"
-    assert info["availableVersion"] == "1.0.20"
+    assert info["installedVersion"] == "1.0.21"
+    assert info["availableVersion"] == "1.0.21"
 
 
 def test_lightroom_plugin_uninstall_removes_generated_plugin(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -223,6 +224,20 @@ def test_lightroom_service_uses_species_id_keyword_name(tmp_path: Path) -> None:
     result = service.process_file(str(image), "en", 0.5, False)
 
     assert result["keywords"] == ["Aves Caesar|gretit1"]
+
+
+def test_lightroom_service_resolves_species_id_to_localized_name(tmp_path: Path) -> None:
+    image = tmp_path / "bird.jpg"
+    image.write_bytes(b"image-data")
+    service = LightroomPredictionService(lambda _request: prediction("7075", "House Sparrow", "Moineau domestique", 0.92))
+
+    result_es = service.process_file(str(image), "es", 0.5, False)
+    result_en = service.process_file(str(image), "en", 0.5, False)
+    result_fr = service.process_file(str(image), "fr", 0.5, False)
+
+    assert result_es["keywords"] == ["Aves Caesar|Gorrión común"]
+    assert result_en["keywords"] == ["Aves Caesar|House Sparrow"]
+    assert result_fr["keywords"] == ["Aves Caesar|Moineau domestique"]
 
 
 def test_lightroom_service_uses_gpx_when_photo_has_no_coordinates(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

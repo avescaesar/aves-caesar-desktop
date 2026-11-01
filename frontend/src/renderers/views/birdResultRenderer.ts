@@ -44,6 +44,7 @@ export class BirdResultRenderer {
 
 
 	private renderBirdCard(bird: BirdResult, birdIndex: number): string {
+		const originalBirdIndex = bird.birdIndex ?? birdIndex;
 		const best = bird.classification[0];
 		const bestName = best ? this.classificationDisplayName(best) : this.context.text("common.unknown");
 		const latinName = best?.name_lat ? `<em>${escapeHtml(best.name_lat)}</em>` : "";
@@ -57,7 +58,7 @@ export class BirdResultRenderer {
 					<span class="collapse-chevron">${iconChevronDown()}</span>
 				</summary>
 				<div class="detection-card__content">
-					<div class="match-label primary-match-label"><span>${this.context.text("detection.primaryMatch")}</span>${this.renderCorrectionEditButton(birdIndex)}</div>
+					<div class="match-label primary-match-label"><span>${this.context.text("detection.primaryMatch")}</span>${this.renderCorrectionEditButton(originalBirdIndex)}</div>
 					<div class="${matchClass}">
 					<div>
 						<strong>${escapeHtml(bestName)}</strong>

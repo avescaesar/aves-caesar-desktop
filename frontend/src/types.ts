@@ -32,6 +32,7 @@ export type ManualCorrection = {
 
 
 export type BirdResult = {
+	birdIndex?: number;
 	box: number[];
 	box_confidence: number;
 	classification: Classification[];

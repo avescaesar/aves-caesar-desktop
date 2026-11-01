@@ -125,7 +125,7 @@ export class DetectionController implements ViewController {
 			this.logCorrectionEvent("correction_apply", { imagePath, birdIndex, speciesId });
 			await this.context.apiClient.setPredictionCorrection(imagePath, birdIndex, speciesId);
 			await this.reloadCurrentPrediction();
-			const correctedSpeciesId = this.state.result?.birds[birdIndex]?.classification[0]?.species_id ?? speciesId;
+			const correctedSpeciesId = this.findBirdByOriginalIndex(birdIndex)?.classification[0]?.species_id ?? speciesId;
 			this.speciesCorrectionState.closeEditor();
 			this.context.render();
 			return { imagePath, birdIndex, speciesId: correctedSpeciesId };
@@ -152,7 +152,7 @@ export class DetectionController implements ViewController {
 			this.logCorrectionEvent("correction_clear", { imagePath, birdIndex });
 			await this.context.apiClient.clearPredictionCorrection(imagePath, birdIndex);
 			await this.reloadCurrentPrediction();
-			const speciesId = this.state.result?.birds[birdIndex]?.classification[0]?.species_id ?? "";
+			const speciesId = this.findBirdByOriginalIndex(birdIndex)?.classification[0]?.species_id ?? "";
 			this.speciesCorrectionState.closeEditor();
 			this.context.render();
 			return speciesId ? { imagePath, birdIndex, speciesId } : null;
@@ -443,7 +443,21 @@ export class DetectionController implements ViewController {
 
 
 	private sortedPredictionResult(result: PredictResponse): PredictResponse {
-		return { ...result, birds: [...result.birds].sort((firstBird, secondBird) => this.birdLeft(firstBird) - this.birdLeft(secondBird) || this.birdTop(firstBird) - this.birdTop(secondBird)) };
+		const indexedBirds = result.birds.map((bird, index) => ({
+			...bird,
+			birdIndex: bird.birdIndex ?? index,
+		}));
+		return { ...result, birds: indexedBirds.sort((firstBird, secondBird) => this.birdLeft(firstBird) - this.birdLeft(secondBird) || this.birdTop(firstBird) - this.birdTop(secondBird)) };
+	}
+
+
+	private findBirdByOriginalIndex(birdIndex: number): BirdResult | null {
+		const birds = this.state.result?.birds;
+		if (!birds) {
+			return null;
+		}
+
+		return birds.find((bird, index) => (bird.birdIndex ?? index) === birdIndex) ?? null;
 	}
 
 
