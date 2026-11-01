@@ -9,7 +9,7 @@ local LrView = import 'LrView'
 
 local Aves = {}
 local BASE_URL = '__AVES_LIGHTROOM_BASE_URL__'
-local PLUGIN_VERSION = '1.0.20'
+local PLUGIN_VERSION = '1.0.21'
 local KEYWORD_ROOT = 'Aves Caesar'
 
 local json = {}
@@ -379,6 +379,7 @@ local function present_options(mode, count)
                     items = {
                         { title = 'Francais', value = 'fr' },
                         { title = 'English', value = 'en' },
+                        { title = 'Español', value = 'es' },
                     },
                 },
             },

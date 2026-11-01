@@ -4,8 +4,10 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable, Iterable, Iterator
 
+from ..data.bird_names import BirdNamesLoader
 from ..data.gpx import GpxService
 from ..media.image_io import ImageLoader
+from ..runtime.config import RuntimeConfig
 
 
 Predictor = Callable[[dict[str, Any]], dict[str, Any]]
@@ -14,9 +16,10 @@ LIGHTROOM_KEYWORD_ROOT = "Aves Caesar"
 
 
 class LightroomPredictionService:
-    def __init__(self, predictor: Predictor, batch_predictor: BatchPredictor | None = None):
+    def __init__(self, predictor: Predictor, batch_predictor: BatchPredictor | None = None, names: BirdNamesLoader | None = None):
         self._predictor = predictor
         self._batch_predictor = batch_predictor
+        self._names = names or BirdNamesLoader(RuntimeConfig.load().labels_path)
 
 
     def process_file(self, path: str, language: str, threshold: float, reprocess: bool, gpx_paths: list[str] | None = None, gpx_match_tolerance_seconds: int | None = None) -> dict[str, Any]:
@@ -154,7 +157,16 @@ class LightroomPredictionService:
 
     def _localized_name(self, classification: dict[str, Any], language: str) -> str:
         localized = classification.get("name") or classification.get(f"name_{language}")
-        return str(localized or classification.get("species_id") or "").strip()
+        if localized:
+            return str(localized).strip()
+
+        species_id = str(classification.get("species_id") or "").strip()
+        if species_id and self._names is not None:
+            bird_names = self._names.get(species_id, language)
+            if bird_names is not None:
+                return bird_names.localized().strip()
+
+        return species_id
 
 
     def _confidence(self, classification: dict[str, Any]) -> float:

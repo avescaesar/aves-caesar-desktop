@@ -52,7 +52,7 @@ class BirdDesktopApi:
         self._logs = LogFiles()
         self._logs.prune_old_logs()
         self._updates = UpdateService()
-        self._lightroom_service = LightroomPredictionService(self._predict_now, self._predict_many_iter_now)
+        self._lightroom_service = LightroomPredictionService(self._predict_now, self._predict_many_iter_now, self._names)
         self._lightroom_jobs = LightroomJobs(self._lightroom_service, lambda: self._settings.accepted_classification_threshold, lambda: self._settings.gpx_match_tolerance_seconds)
         self._lightroom_server = LightroomBridgeServer(self._lightroom_jobs)
         self._lightroom_server.start()
