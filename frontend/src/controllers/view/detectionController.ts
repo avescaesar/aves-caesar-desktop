@@ -39,7 +39,7 @@ export class DetectionController implements ViewController {
 		bindEvent(document.querySelector<HTMLInputElement>("#longitude"), "input", event => this.state.longitude = (event.target as HTMLInputElement).value);
 		document.querySelectorAll<HTMLElement>(".detection-card").forEach(card => this.bindDetectionCard(card));
 		document.querySelectorAll<HTMLButtonElement>(".bird-box__label").forEach(button => this.bindBirdBoxLabel(button));
-		const correctionActionElements = document.querySelectorAll<HTMLElement>("[data-action='edit-correction'], [data-action='select-correction-species'], [data-action='clear-correction'], [data-action='cancel-correction']");
+		const correctionActionElements = document.querySelectorAll<HTMLElement>("[data-action='edit-correction'], [data-action='select-correction-species'], [data-action='select-alternate-correction'], [data-action='clear-correction'], [data-action='cancel-correction']");
 		this.logCorrectionEvent("correction_bind_events", { count: correctionActionElements.length, activeView: this.context.state.navigation.activeView, hasResult: Boolean(this.state.result) });
 		bindEvent(appElement, "click", event => this.handleCorrectionClick(event));
 		bindEvent(appElement, "input", event => this.handleCorrectionInput(event));
@@ -113,11 +113,18 @@ export class DetectionController implements ViewController {
 
 
 	public async applyPredictionCorrection(speciesId: string): Promise<PredictionCorrectionResult | null> {
-		const imagePath = this.state.image?.path;
 		const birdIndex = this.speciesCorrectionState.editingBirdIndex;
-		if (!imagePath || birdIndex === null) {
+		if (birdIndex === null) {
 			return null;
 		}
+
+		return this.applyPredictionCorrectionForBird(birdIndex, speciesId);
+	}
+
+
+	private async applyPredictionCorrectionForBird(birdIndex: number, speciesId: string): Promise<PredictionCorrectionResult | null> {
+		const imagePath = this.state.image?.path;
+		if (!imagePath) return null;
 
 		this.speciesCorrectionState.busy = true;
 		this.context.render();
@@ -125,7 +132,7 @@ export class DetectionController implements ViewController {
 			this.logCorrectionEvent("correction_apply", { imagePath, birdIndex, speciesId });
 			await this.context.apiClient.setPredictionCorrection(imagePath, birdIndex, speciesId);
 			await this.reloadCurrentPrediction();
-			const correctedSpeciesId = this.state.result?.birds[birdIndex]?.classification[0]?.species_id ?? speciesId;
+			const correctedSpeciesId = this.state.result?.birds.find(bird => bird.sourceBirdIndex === birdIndex)?.classification[0]?.species_id ?? speciesId;
 			this.speciesCorrectionState.closeEditor();
 			this.context.render();
 			return { imagePath, birdIndex, speciesId: correctedSpeciesId };
@@ -152,7 +159,7 @@ export class DetectionController implements ViewController {
 			this.logCorrectionEvent("correction_clear", { imagePath, birdIndex });
 			await this.context.apiClient.clearPredictionCorrection(imagePath, birdIndex);
 			await this.reloadCurrentPrediction();
-			const speciesId = this.state.result?.birds[birdIndex]?.classification[0]?.species_id ?? "";
+			const speciesId = this.state.result?.birds.find(bird => bird.sourceBirdIndex === birdIndex)?.classification[0]?.species_id ?? "";
 			this.speciesCorrectionState.closeEditor();
 			this.context.render();
 			return speciesId ? { imagePath, birdIndex, speciesId } : null;
@@ -295,7 +302,7 @@ export class DetectionController implements ViewController {
 			return;
 		}
 
-		const actionElement = target.closest<HTMLElement>("[data-action='edit-correction'], [data-action='select-correction-species'], [data-action='clear-correction'], [data-action='cancel-correction']");
+		const actionElement = target.closest<HTMLElement>("[data-action='edit-correction'], [data-action='select-correction-species'], [data-action='select-alternate-correction'], [data-action='clear-correction'], [data-action='cancel-correction']");
 		if (!actionElement) {
 			return;
 		}
@@ -315,6 +322,12 @@ export class DetectionController implements ViewController {
 
 		if (actionElement.dataset.action === "select-correction-species") {
 			void this.applyCorrectionAndRefreshCollection(actionElement.dataset.speciesId || "");
+			return;
+		}
+
+		if (actionElement.dataset.action === "select-alternate-correction") {
+			const birdIndex = Number(actionElement.closest<HTMLElement>(".detection-card")?.dataset.sourceBirdIndex);
+			void this.applyAlternateCorrection(birdIndex, actionElement.dataset.speciesId || "");
 			return;
 		}
 
@@ -345,6 +358,16 @@ export class DetectionController implements ViewController {
 		}
 
 		const correction = await this.applyPredictionCorrection(speciesId);
+		await this.refreshCollectionAfterCorrection(correction);
+	}
+
+
+	private async applyAlternateCorrection(birdIndex: number, speciesId: string): Promise<void> {
+		if (!Number.isInteger(birdIndex) || birdIndex < 0 || !speciesId) {
+			return;
+		}
+
+		const correction = await this.applyPredictionCorrectionForBird(birdIndex, speciesId);
 		await this.refreshCollectionAfterCorrection(correction);
 	}
 
@@ -443,7 +466,8 @@ export class DetectionController implements ViewController {
 
 
 	private sortedPredictionResult(result: PredictResponse): PredictResponse {
-		return { ...result, birds: [...result.birds].sort((firstBird, secondBird) => this.birdLeft(firstBird) - this.birdLeft(secondBird) || this.birdTop(firstBird) - this.birdTop(secondBird)) };
+		const birds = result.birds.map((bird, sourceBirdIndex) => ({ ...bird, sourceBirdIndex: bird.sourceBirdIndex ?? sourceBirdIndex }));
+		return { ...result, birds: birds.sort((firstBird, secondBird) => this.birdLeft(firstBird) - this.birdLeft(secondBird) || this.birdTop(firstBird) - this.birdTop(secondBird)) };
 	}
 
 

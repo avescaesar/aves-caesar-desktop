@@ -111,7 +111,7 @@ function speciesNames(item: CollectionSpecies): { commonName: string; genus: str
 }
 
 function draftChecklists(selected: CollectionSpecies[]): ChecklistDraft[] {
-	type ChecklistSeed = { date: string; locationKey: string; times: Set<string>; coordinates: Array<[number, number]>; observations: Map<string, ExportObservation> };
+	type ChecklistSeed = { date: string; locationKey: string; times: Set<string>; coordinates: Array<[number, number]>; observations: Map<string, ExportObservation>; photoBirds: Map<string, Map<string, Set<number>>> };
 	const groups = new Map<string, ChecklistSeed>();
 	for (const item of selected) {
 		const names = speciesNames(item);
@@ -124,7 +124,7 @@ function draftChecklists(selected: CollectionSpecies[]): ChecklistDraft[] {
 			const key = `${date}\u0000${locationKey}`;
 			let group = groups.get(key);
 			if (!group) {
-				group = { date, locationKey, times: new Set<string>(), coordinates: [], observations: new Map<string, ExportObservation>() };
+				group = { date, locationKey, times: new Set<string>(), coordinates: [], observations: new Map<string, ExportObservation>(), photoBirds: new Map<string, Map<string, Set<number>>>() };
 				groups.set(key, group);
 			}
 			if (time) group.times.add(time);
@@ -132,6 +132,18 @@ function draftChecklists(selected: CollectionSpecies[]): ChecklistDraft[] {
 				group.coordinates.push([occurrence.usedLatitude, occurrence.usedLongitude]);
 			}
 			if (!group.observations.has(item.speciesId)) group.observations.set(item.speciesId, { ...names, count: "X" });
+			let photos = group.photoBirds.get(item.speciesId);
+			if (!photos) {
+				photos = new Map<string, Set<number>>();
+				group.photoBirds.set(item.speciesId, photos);
+			}
+			const photoKey = occurrence.imagePath.replace(/\\/g, "/").toLocaleLowerCase();
+			let birdIndices = photos.get(photoKey);
+			if (!birdIndices) {
+				birdIndices = new Set<number>();
+				photos.set(photoKey, birdIndices);
+			}
+			birdIndices.add(occurrence.birdIndex);
 		}
 	}
 
@@ -142,12 +154,31 @@ function draftChecklists(selected: CollectionSpecies[]): ChecklistDraft[] {
 		for (const [speciesId, observation] of group.observations) {
 			if (!known.observations.has(speciesId)) known.observations.set(speciesId, observation);
 		}
+		for (const [speciesId, photos] of group.photoBirds) {
+			let knownPhotos = known.photoBirds.get(speciesId);
+			if (!knownPhotos) {
+				knownPhotos = new Map<string, Set<number>>();
+				known.photoBirds.set(speciesId, knownPhotos);
+			}
+			for (const [photoPath, birdIndices] of photos) {
+				let knownBirdIndices = knownPhotos.get(photoPath);
+				if (!knownBirdIndices) {
+					knownBirdIndices = new Set<number>();
+					knownPhotos.set(photoPath, knownBirdIndices);
+				}
+				for (const birdIndex of birdIndices) knownBirdIndices.add(birdIndex);
+			}
+		}
 		for (const time of group.times) known.times.add(time);
 		known.coordinates.push(...group.coordinates);
 		groups.delete(`${group.date}\u0000`);
 	}
 
 	return [...groups.values()].sort((left, right) => (left.date || "9999").localeCompare(right.date || "9999") || left.locationKey.localeCompare(right.locationKey)).map(group => {
+		for (const [speciesId, observation] of group.observations) {
+			const perPhotoCounts = [...(group.photoBirds.get(speciesId)?.values() ?? [])].map(birds => birds.size);
+			if (perPhotoCounts.length > 0) observation.count = String(Math.max(...perPhotoCounts));
+		}
 		const latitude = group.coordinates.length ? preciseCoordinate(group.coordinates.reduce((sum, point) => sum + point[0], 0) / group.coordinates.length) : "";
 		const longitude = group.coordinates.length ? preciseCoordinate(group.coordinates.reduce((sum, point) => sum + point[1], 0) / group.coordinates.length) : "";
 		return {
@@ -270,7 +301,7 @@ export function openEbirdRecordExport(selected: CollectionSpecies[]): void {
 	backdrop.className = "modal-backdrop ebird-export-backdrop";
 	backdrop.innerHTML = `<section class="ebird-export-modal" role="dialog" aria-modal="true" aria-labelledby="ebirdExportTitle">
 		<header><div><h2 id="ebirdExportTitle">Export eBird Record Format</h2><p>Review the proposed checklists. Photos are not bird counts, so each species starts as X (present, count unknown).</p></div><button type="button" class="secondary-action" data-close-ebird>Close</button></header>
-		<div class="ebird-export-notice">Photos are separated into checklists by capture date and GPS cells rounded to 0.01°. Each cell is about 1.1 km north–south; east–west width varies with latitude. This is an automatic grouping aid, not eBird’s location boundary. Confirm each checklist represents one eBird location. The selected photos span ${new Set(selected.flatMap(item => item.occurrences.map(occurrence => dateValue(occurrence.usedDatetime)).filter(Boolean))).size || "unknown"} date(s) and ${new Set(selected.flatMap(item => item.occurrences.map(occurrence => {
+		<div class="ebird-export-notice">Species counts are prefilled from detections in the selected photos. If a species appears in multiple photos in one checklist, the count uses the highest count from a single photo to reduce repeat counting; review and adjust the count as needed. Photos are separated into checklists by capture date and GPS cells rounded to 0.01°. Each cell is about 1.1 km north–south; east–west width varies with latitude. This is an automatic grouping aid, not eBird’s location boundary. Confirm each checklist represents one eBird location. The selected photos span ${new Set(selected.flatMap(item => item.occurrences.map(occurrence => dateValue(occurrence.usedDatetime)).filter(Boolean))).size || "unknown"} date(s) and ${new Set(selected.flatMap(item => item.occurrences.map(occurrence => {
 			const latitude = roundedCoordinate(occurrence.usedLatitude);
 			const longitude = roundedCoordinate(occurrence.usedLongitude);
 			return latitude && longitude ? `${latitude},${longitude}` : "";

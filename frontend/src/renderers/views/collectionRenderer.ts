@@ -198,25 +198,27 @@ export class CollectionRenderer {
 						<option value="withoutGps" ${this.collection.gpsFilter === "withoutGps" ? "selected" : ""}>${this.context.text("collection.withoutGps")}</option>
 					</select>
 				</label>
-				<label class="collection-filter-control" for="collectionConfidenceFilter">
-					<span>${this.context.text("collection.confidenceFilter")}</span>
-					<select id="collectionConfidenceFilter">
-						<option value="all">${this.context.text("collection.anyConfidence")}</option>
-						<option value="manual" ${this.collection.confidenceFilter === "manual" ? "selected" : ""}>${this.context.text("collection.manualOnly")}</option>
-						<option value="low" ${this.collection.confidenceFilter === "low" ? "selected" : ""}>${this.context.text("collection.lowConfidence")}</option>
-						<option value="medium" ${this.collection.confidenceFilter === "medium" ? "selected" : ""}>${this.context.text("collection.mediumConfidence")}</option>
-						<option value="high" ${this.collection.confidenceFilter === "high" ? "selected" : ""}>${this.context.text("collection.highConfidence")}</option>
-					</select>
-				</label>
+				<div class="collection-filter-control collection-confidence-control">
+					<div class="collection-confidence-heading"><span>${this.context.text("collection.confidenceFilter")}</span><output id="collectionConfidenceOutput">${this.collection.confidenceMin}–${this.collection.confidenceMax}%</output></div>
+					<div class="collection-range-slider" style="--range-start:${this.collection.confidenceMin}%;--range-end:${this.collection.confidenceMax}%">
+						<input id="collectionConfidenceMin" type="range" min="0" max="100" step="1" value="${this.collection.confidenceMin}" aria-label="${escapeHtml(this.context.text("collection.confidenceMin"))}" />
+						<input id="collectionConfidenceMax" type="range" min="0" max="100" step="1" value="${this.collection.confidenceMax}" aria-label="${escapeHtml(this.context.text("collection.confidenceMax"))}" />
+					</div>
+					<label class="collection-manual-only"><input id="collectionManualOnly" type="checkbox" ${this.collection.manualOnly ? "checked" : ""} /><span>${this.context.text("collection.manualOnly")}</span></label>
+				</div>
 				<label class="collection-filter-control" for="collectionSpeciesSort">
 					<span>${this.context.text("collection.sortBy")}</span>
 					<select id="collectionSpeciesSort">
-						<option value="name" ${this.collection.speciesSortOrder === "name" ? "selected" : ""}>${this.context.text("collection.sortBySpecies")}</option>
-						<option value="family" ${this.collection.speciesSortOrder === "family" ? "selected" : ""}>${this.context.text("collection.sortByFamily")}</option>
-						<option value="date" ${this.collection.speciesSortOrder === "date" ? "selected" : ""}>${this.context.text("collection.sortByDate")}</option>
-						<option value="location" ${this.collection.speciesSortOrder === "location" ? "selected" : ""}>${this.context.text("collection.sortByLocation")}</option>
-						<option value="imageCount" ${this.collection.speciesSortOrder === "imageCount" ? "selected" : ""}>${this.context.text("collection.sortByImageCount")}</option>
-						<option value="confidence" ${this.collection.speciesSortOrder === "confidence" ? "selected" : ""}>${this.context.text("collection.sortByConfidence")}</option>
+						<option value="nameAsc" ${this.collection.speciesSortOrder === "nameAsc" ? "selected" : ""}>${this.context.text("collection.sortByNameAsc")}</option>
+						<option value="nameDesc" ${this.collection.speciesSortOrder === "nameDesc" ? "selected" : ""}>${this.context.text("collection.sortByNameDesc")}</option>
+						<option value="familyAsc" ${this.collection.speciesSortOrder === "familyAsc" ? "selected" : ""}>${this.context.text("collection.sortByFamilyAsc")}</option>
+						<option value="familyDesc" ${this.collection.speciesSortOrder === "familyDesc" ? "selected" : ""}>${this.context.text("collection.sortByFamilyDesc")}</option>
+						<option value="dateAsc" ${this.collection.speciesSortOrder === "dateAsc" ? "selected" : ""}>${this.context.text("collection.sortByDateOldest")}</option>
+						<option value="dateDesc" ${this.collection.speciesSortOrder === "dateDesc" ? "selected" : ""}>${this.context.text("collection.sortByDateNewest")}</option>
+						<option value="imageCountDesc" ${this.collection.speciesSortOrder === "imageCountDesc" ? "selected" : ""}>${this.context.text("collection.sortByImagesMost")}</option>
+						<option value="imageCountAsc" ${this.collection.speciesSortOrder === "imageCountAsc" ? "selected" : ""}>${this.context.text("collection.sortByImagesLeast")}</option>
+						<option value="confidenceAsc" ${this.collection.speciesSortOrder === "confidenceAsc" ? "selected" : ""}>${this.context.text("collection.sortByConfidenceLowHigh")}</option>
+						<option value="confidenceDesc" ${this.collection.speciesSortOrder === "confidenceDesc" ? "selected" : ""}>${this.context.text("collection.sortByConfidenceHighLow")}</option>
 					</select>
 				</label>
 				<div class="collection-filter-actions">${this.renderCollectionFilterActions()}</div>
@@ -530,9 +532,11 @@ export class CollectionRenderer {
 		const familySelect = list.querySelector<HTMLSelectElement>("#collectionFamilyFilter");
 		const sortSelect = list.querySelector<HTMLSelectElement>("#collectionSpeciesSort");
 		const gpsSelect = list.querySelector<HTMLSelectElement>("#collectionGpsFilter");
-		const confidenceSelect = list.querySelector<HTMLSelectElement>("#collectionConfidenceFilter");
+		const confidenceMin = list.querySelector<HTMLInputElement>("#collectionConfidenceMin");
+		const confidenceMax = list.querySelector<HTMLInputElement>("#collectionConfidenceMax");
+		const manualOnly = list.querySelector<HTMLInputElement>("#collectionManualOnly");
 		const actions = list.querySelector<HTMLElement>(".collection-filter-actions");
-		if (!familySelect || !sortSelect || !gpsSelect || !confidenceSelect || !actions) {
+		if (!familySelect || !sortSelect || !gpsSelect || !confidenceMin || !confidenceMax || !manualOnly || !actions) {
 			return;
 		}
 
@@ -542,7 +546,14 @@ export class CollectionRenderer {
 		familySelect.value = families.includes(this.collection.familyFilter) ? this.collection.familyFilter : "";
 		sortSelect.value = this.collection.speciesSortOrder;
 		gpsSelect.value = this.collection.gpsFilter;
-		confidenceSelect.value = this.collection.confidenceFilter;
+		confidenceMin.value = String(this.collection.confidenceMin);
+		confidenceMax.value = String(this.collection.confidenceMax);
+		manualOnly.checked = this.collection.manualOnly;
+		const range = list.querySelector<HTMLElement>(".collection-range-slider");
+		range?.style.setProperty("--range-start", `${this.collection.confidenceMin}%`);
+		range?.style.setProperty("--range-end", `${this.collection.confidenceMax}%`);
+		const confidenceOutput = list.querySelector<HTMLOutputElement>("#collectionConfidenceOutput");
+		if (confidenceOutput) confidenceOutput.value = `${this.collection.confidenceMin}–${this.collection.confidenceMax}%`;
 		actions.innerHTML = this.renderCollectionFilterActions();
 	}
 
@@ -605,22 +616,19 @@ export class CollectionRenderer {
 		return [...species].sort((left, right) => {
 			const nameOrder = () => this.speciesName(left).localeCompare(this.speciesName(right), this.settings.appLanguage, { sensitivity: "base" });
 			switch (this.collection.speciesSortOrder) {
-				case "family":
-					return (left.family_name || "\uffff").localeCompare(right.family_name || "\uffff", this.settings.appLanguage, { sensitivity: "base" }) || nameOrder();
-				case "date":
-					return this.firstCaptureDate(left).localeCompare(this.firstCaptureDate(right)) || nameOrder();
-				case "location": {
-					const leftLocation = this.firstLocation(left);
-					const rightLocation = this.firstLocation(right);
-					if (!leftLocation || !rightLocation) {
-						return leftLocation ? -1 : rightLocation ? 1 : nameOrder();
-					}
-					return leftLocation.latitude - rightLocation.latitude || leftLocation.longitude - rightLocation.longitude || nameOrder();
-				}
-				case "imageCount":
-					return right.imageCount - left.imageCount || nameOrder();
-				case "confidence":
-					return this.lowestConfidence(left) - this.lowestConfidence(right) || nameOrder();
+				case "nameDesc": return -nameOrder();
+				case "familyAsc":
+					return this.compareFamily(left, right, false) || nameOrder();
+				case "familyDesc":
+					return this.compareFamily(left, right, true) || nameOrder();
+				case "dateAsc":
+					return this.compareCaptureDate(left, right, false) || nameOrder();
+				case "dateDesc":
+					return this.compareCaptureDate(left, right, true) || nameOrder();
+				case "imageCountAsc": return left.imageCount - right.imageCount || nameOrder();
+				case "imageCountDesc": return right.imageCount - left.imageCount || nameOrder();
+				case "confidenceAsc": return this.compareConfidence(left, right, false) || nameOrder();
+				case "confidenceDesc": return this.compareConfidence(left, right, true) || nameOrder();
 				default:
 					return nameOrder();
 			}
@@ -628,27 +636,41 @@ export class CollectionRenderer {
 	}
 
 
+	private compareFamily(left: CollectionSpecies, right: CollectionSpecies, descending: boolean): number {
+		const leftFamily = left.family_name?.trim() || "";
+		const rightFamily = right.family_name?.trim() || "";
+		if (Boolean(leftFamily) !== Boolean(rightFamily)) return leftFamily ? -1 : 1;
+		const order = leftFamily.localeCompare(rightFamily, this.settings.appLanguage, { sensitivity: "base" });
+		return descending ? -order : order;
+	}
+
+
+	private compareCaptureDate(left: CollectionSpecies, right: CollectionSpecies, descending: boolean): number {
+		const leftDate = this.firstCaptureDate(left);
+		const rightDate = this.firstCaptureDate(right);
+		const leftMissing = leftDate.startsWith("9999-");
+		const rightMissing = rightDate.startsWith("9999-");
+		if (leftMissing !== rightMissing) return leftMissing ? 1 : -1;
+		return (descending ? rightDate.localeCompare(leftDate) : leftDate.localeCompare(rightDate));
+	}
+
+
+	private compareConfidence(left: CollectionSpecies, right: CollectionSpecies, descending: boolean): number {
+		const confidence = (species: CollectionSpecies): number | null => {
+			const values = species.occurrences.filter(occurrence => occurrence.classification.manual !== true).map(occurrence => occurrence.confidence);
+			return values.length > 0 ? Math.min(...values) : null;
+		};
+		const leftConfidence = confidence(left);
+		const rightConfidence = confidence(right);
+		if ((leftConfidence === null) !== (rightConfidence === null)) return leftConfidence === null ? 1 : -1;
+		if (leftConfidence === null || rightConfidence === null) return 0;
+		const order = leftConfidence - rightConfidence;
+		return descending ? -order : order;
+	}
+
+
 	private firstCaptureDate(species: CollectionSpecies): string {
 		return species.occurrences.map(item => this.normalizedCaptureDate(item.usedDatetime)).filter(Boolean).sort()[0] || "9999-99-99";
-	}
-
-
-	private firstLocation(species: CollectionSpecies): { latitude: number; longitude: number } | null {
-		const locations = species.occurrences.flatMap(item => typeof item.usedLatitude === "number" && typeof item.usedLongitude === "number"
-			? [{ latitude: item.usedLatitude, longitude: item.usedLongitude }]
-			: []);
-		locations.sort((left, right) => left.latitude - right.latitude || left.longitude - right.longitude);
-		return locations[0] ?? null;
-	}
-
-
-	private lowestConfidence(species: CollectionSpecies): number {
-		const confidences = species.occurrences.filter(occurrence => occurrence.classification.manual !== true).map(occurrence => occurrence.confidence);
-		if (confidences.length === 0) {
-			return 1;
-		}
-
-		return Math.min(...confidences);
 	}
 
 

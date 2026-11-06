@@ -200,5 +200,18 @@
 	"status.predicting": "Running detection and classification...",
 	"status.predictionFailed": "Prediction failed.",
 	"status.selectImage": "Select an image to start.",
-	"status.selectImageBeforeGpx": "Choose a picture before selecting GPX."
+	"status.selectImageBeforeGpx": "Choose a picture before selecting GPX.",
+	"collection.confidenceMin": "Minimum confidence",
+	"collection.confidenceMax": "Maximum confidence",
+	"collection.sortByNameAsc": "Species name (A to Z)",
+	"collection.sortByNameDesc": "Species name (Z to A)",
+	"collection.sortByFamilyAsc": "Family (A to Z)",
+	"collection.sortByFamilyDesc": "Family (Z to A)",
+	"collection.sortByDateOldest": "Capture date (oldest first)",
+	"collection.sortByDateNewest": "Capture date (newest first)",
+	"collection.sortByImagesMost": "Most images",
+	"collection.sortByImagesLeast": "Least images",
+	"collection.sortByConfidenceLowHigh": "Confidence (low to high)",
+	"collection.sortByConfidenceHighLow": "Confidence (high to low)",
+	"correction.selectAlternative": "Use this identification"
 }

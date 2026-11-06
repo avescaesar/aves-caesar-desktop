@@ -1,4 +1,4 @@
-import type { CollectionJobStatus, CollectionOccurrence, CollectionScanMode, CollectionSpecies } from "../types";
+import type { CollectionJobStatus, CollectionOccurrence, CollectionScanMode, CollectionSpecies, CollectionViewPreferences } from "../types";
 
 export class CollectionState {
 	public directory = "";
@@ -14,15 +14,17 @@ export class CollectionState {
 	public dateFrom = "";
 	public dateTo = "";
 	public gpsFilter: "all" | "withGps" | "withoutGps" = "all";
-	public confidenceFilter: "all" | "manual" | "low" | "medium" | "high" = "all";
-	public speciesSortOrder: "name" | "family" | "date" | "location" | "imageCount" | "confidence" = "name";
+	public confidenceMin = 0;
+	public confidenceMax = 100;
+	public manualOnly = false;
+	public speciesSortOrder: CollectionViewPreferences["speciesSortOrder"] = "nameAsc";
 	public selectedSpeciesId: string | null = null;
 	public selectedOccurrenceIndex = 0;
 	public occurrenceOpen = false;
 	public readonly selectedSpeciesIds = new Set<string>();
 	private readonly removedSpeciesIds = new Set<string>();
 	private readonly removedImagePaths = new Set<string>();
-	private readonly sessionKeyPhotos = new Map<string, CollectionOccurrence>();
+	private keyPhotos: CollectionViewPreferences["keyPhotos"] = {};
 	private keyPhotoStorageCache: Record<string, { imagePath: string; birdIndex: number }> | null = null;
 
 
@@ -36,13 +38,6 @@ export class CollectionState {
 		this.activeJobId = jobId;
 		this.error = "";
 		this.status = { state: "running", total: previousStatus?.total ?? 0, completed: previousStatus?.completed ?? 0, errors: previousStatus?.errors ?? 0, currentFile: "", message: "", species: previousStatus?.species ?? [] };
-		this.speciesSearchQuery = "";
-		this.familyFilter = "";
-		this.dateFrom = "";
-		this.dateTo = "";
-		this.gpsFilter = "all";
-		this.confidenceFilter = "all";
-		this.speciesSortOrder = "name";
 		this.selectedSpeciesId = null;
 		this.selectedOccurrenceIndex = 0;
 		this.occurrenceOpen = false;
@@ -73,15 +68,6 @@ export class CollectionState {
 
 	public clear(): void {
 		this.status = null;
-		this.speciesSearchQuery = "";
-		this.familyFilter = "";
-		this.dateFrom = "";
-		this.dateTo = "";
-		this.gpsFilter = "all";
-		this.confidenceFilter = "all";
-		this.speciesSortOrder = "name";
-		this.removedSpeciesIds.clear();
-		this.removedImagePaths.clear();
 		this.selectedSpeciesId = null;
 		this.selectedOccurrenceIndex = 0;
 		this.occurrenceOpen = false;
@@ -114,7 +100,7 @@ export class CollectionState {
 				return [];
 			}
 
-			const keyPhoto = this.keyPhotoOccurrence(species);
+			const keyPhoto = this.keyPhotoOccurrence(species, occurrences);
 			return [{ ...species, thumbnailDataUrl: keyPhoto?.thumbnailDataUrl ?? species.thumbnailDataUrl, occurrences, occurrenceCount: occurrences.length, imageCount: new Set(occurrences.map(occurrence => this.imagePathKey(occurrence.imagePath))).size }];
 		});
 	}
@@ -124,7 +110,7 @@ export class CollectionState {
 		const species = this.species().find(item => item.speciesId === speciesId);
 		if (!species?.occurrences.some(item => item.imagePath === occurrence.imagePath && item.birdIndex === occurrence.birdIndex)) return;
 		const identity = this.keyPhotoStorageIdentity(speciesId);
-		this.sessionKeyPhotos.set(identity, occurrence);
+		this.keyPhotos[speciesId] = { imagePath: occurrence.imagePath, birdIndex: occurrence.birdIndex };
 		const saved = this.savedKeyPhotos();
 		saved[identity] = { imagePath: occurrence.imagePath, birdIndex: occurrence.birdIndex };
 		try {
@@ -157,16 +143,10 @@ export class CollectionState {
 			}
 
 			const confidence = occurrence.confidence;
-			if (this.confidenceFilter === "manual" && occurrence.classification.manual !== true) {
+			if (this.manualOnly && occurrence.classification.manual !== true) {
 				return false;
 			}
-			if (this.confidenceFilter === "low" && (occurrence.classification.manual === true || confidence >= 0.5)) {
-				return false;
-			}
-			if (this.confidenceFilter === "medium" && (occurrence.classification.manual === true || confidence < 0.5 || confidence >= 0.8)) {
-				return false;
-			}
-			if (this.confidenceFilter === "high" && (occurrence.classification.manual === true || confidence < 0.8)) {
+			if (confidence * 100 < this.confidenceMin || confidence * 100 > this.confidenceMax) {
 				return false;
 			}
 
@@ -229,17 +209,76 @@ export class CollectionState {
 	}
 
 
+	public collectionPreferences(): CollectionViewPreferences {
+		return {
+			speciesSearchQuery: this.speciesSearchQuery,
+			familyFilter: this.familyFilter,
+			dateFrom: this.dateFrom,
+			dateTo: this.dateTo,
+			gpsFilter: this.gpsFilter,
+			confidenceMin: this.confidenceMin,
+			confidenceMax: this.confidenceMax,
+			manualOnly: this.manualOnly,
+			speciesSortOrder: this.speciesSortOrder,
+			removedSpeciesIds: [...this.removedSpeciesIds],
+			removedImagePaths: [...this.removedImagePaths],
+			keyPhotos: { ...this.keyPhotos },
+		};
+	}
+
+
+	public restoreCollectionPreferences(value: Partial<CollectionViewPreferences> | null | undefined): void {
+		this.speciesSearchQuery = typeof value?.speciesSearchQuery === "string" ? value.speciesSearchQuery : "";
+		this.familyFilter = typeof value?.familyFilter === "string" ? value.familyFilter : "";
+		this.dateFrom = typeof value?.dateFrom === "string" ? value.dateFrom : "";
+		this.dateTo = typeof value?.dateTo === "string" ? value.dateTo : "";
+		this.gpsFilter = value?.gpsFilter === "withGps" || value?.gpsFilter === "withoutGps" ? value.gpsFilter : "all";
+		const confidenceMin = this.validConfidence(value?.confidenceMin, 0);
+		const confidenceMax = this.validConfidence(value?.confidenceMax, 100);
+		this.confidenceMin = Math.min(confidenceMin, confidenceMax);
+		this.confidenceMax = Math.max(confidenceMin, confidenceMax);
+		this.manualOnly = value?.manualOnly === true;
+		this.speciesSortOrder = this.validSortOrder(value?.speciesSortOrder);
+		this.removedSpeciesIds.clear();
+		for (const speciesId of Array.isArray(value?.removedSpeciesIds) ? value.removedSpeciesIds : []) {
+			if (typeof speciesId === "string") this.removedSpeciesIds.add(speciesId);
+		}
+		this.removedImagePaths.clear();
+		for (const imagePath of Array.isArray(value?.removedImagePaths) ? value.removedImagePaths : []) {
+			if (typeof imagePath === "string") this.removedImagePaths.add(this.imagePathKey(imagePath));
+		}
+		this.keyPhotos = {};
+		if (value?.keyPhotos && typeof value.keyPhotos === "object") {
+			for (const [speciesId, photo] of Object.entries(value.keyPhotos)) {
+				if (photo && typeof photo.imagePath === "string" && Number.isInteger(photo.birdIndex) && photo.birdIndex >= 0) {
+					this.keyPhotos[speciesId] = { imagePath: photo.imagePath, birdIndex: photo.birdIndex };
+				}
+			}
+		}
+		if (Object.keys(this.keyPhotos).length === 0) {
+			this.restoreLegacyKeyPhotos();
+		}
+		this.selectedSpeciesIds.clear();
+		this.resetNavigation();
+	}
+
+
 	private imagePathKey(imagePath: string): string {
 		return imagePath.replace(/\\/g, "/").toLocaleLowerCase();
 	}
 
 
-	private keyPhotoOccurrence(species: CollectionSpecies | undefined): CollectionOccurrence | null {
+	private keyPhotoOccurrence(species: CollectionSpecies | undefined, eligibleOccurrences?: CollectionOccurrence[]): CollectionOccurrence | null {
 		if (!species) return null;
 		const identity = this.keyPhotoStorageIdentity(species.speciesId);
-		const saved = this.sessionKeyPhotos.get(identity) ?? this.savedKeyPhoto(identity, species);
-		if (!saved || this.removedImagePaths.has(this.imagePathKey(saved.imagePath))) return null;
-		return species.occurrences.find(item => item.imagePath === saved.imagePath && item.birdIndex === saved.birdIndex) ?? null;
+		const saved = this.keyPhotos[species.speciesId] ?? this.savedKeyPhoto(identity, species);
+		const eligible = eligibleOccurrences ?? this.visibleOccurrences(species).filter(item => !this.removedImagePaths.has(this.imagePathKey(item.imagePath)));
+		const chosen = saved
+			? eligible.find(item => item.imagePath === saved.imagePath && item.birdIndex === saved.birdIndex)
+			: null;
+		if (chosen) return chosen;
+		return eligible
+			.sort((left, right) => right.confidence - left.confidence || left.imagePath.localeCompare(right.imagePath) || left.birdIndex - right.birdIndex)[0] ?? null;
 	}
 
 
@@ -264,6 +303,28 @@ export class CollectionState {
 
 	private keyPhotoStorageIdentity(speciesId: string): string {
 		return `${this.directory.replace(/\\/g, "/").toLocaleLowerCase()}|${speciesId}`;
+	}
+
+
+	private restoreLegacyKeyPhotos(): void {
+		const prefix = `${this.directory.replace(/\\/g, "/").toLocaleLowerCase()}|`;
+		for (const [identity, photo] of Object.entries(this.savedKeyPhotos())) {
+			if (identity.startsWith(prefix)) {
+				this.keyPhotos[identity.slice(prefix.length)] = photo;
+			}
+		}
+	}
+
+
+	private validConfidence(value: number | undefined, fallback: number): number {
+		return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(100, Math.round(value))) : fallback;
+	}
+
+
+	private validSortOrder(value: CollectionViewPreferences["speciesSortOrder"] | undefined): CollectionViewPreferences["speciesSortOrder"] {
+		return ["nameAsc", "nameDesc", "familyAsc", "familyDesc", "dateAsc", "dateDesc", "imageCountAsc", "imageCountDesc", "confidenceAsc", "confidenceDesc"].includes(value || "")
+			? value as CollectionViewPreferences["speciesSortOrder"]
+			: "nameAsc";
 	}
 
 

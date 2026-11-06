@@ -1,4 +1,4 @@
-import type { BirdName, ClearCacheResponse, CollectionJobStart, CollectionJobStatus, CollectionScanMode, ExportLogsResponse, GpxMatch, ImageInfo, LightroomInfo, OrganizationJobStart, OrganizationJobStatus, OrganizationRequest, PredictRequest, PredictResponse, PredictionJobStart, PredictionJobStatus, AppLanguage, AppLanguagePreference, RuntimeInfo, UpdateInfo, UpdateInstallStart, UpdateInstallStatus } from "./types";
+import type { BirdName, ClearCacheResponse, CollectionJobStart, CollectionJobStatus, CollectionScanMode, CollectionViewPreferences, ExportLogsResponse, GpxMatch, ImageInfo, LightroomInfo, OrganizationJobStart, OrganizationJobStatus, OrganizationRequest, PredictRequest, PredictResponse, PredictionJobStart, PredictionJobStatus, AppLanguage, AppLanguagePreference, RuntimeInfo, UpdateInfo, UpdateInstallStart, UpdateInstallStatus } from "./types";
 
 type PywebviewBackendApi = {
 	choose_image: () => Promise<ImageInfo | null>;
@@ -39,6 +39,8 @@ type PywebviewBackendApi = {
 	set_batch_directories: (sourceDirectory: string, destinationDirectory: string) => Promise<{ batchSourceDirectory: string; batchDestinationDirectory: string }>;
 	set_batch_options: (recursive: boolean, renameFiles: boolean) => Promise<{ batchRecursive: boolean; batchRenameFiles: boolean }>;
 	set_collection_directory: (path: string) => Promise<{ collectionDirectory: string }>;
+	get_collection_view_preferences: (directory: string) => Promise<{ preferences: Partial<CollectionViewPreferences> }>;
+	set_collection_view_preferences: (directory: string, preferences: CollectionViewPreferences) => Promise<{ status: string }>;
 	set_collection_scan_mode: (scanMode: CollectionScanMode) => Promise<{ collectionScanMode: CollectionScanMode }>;
 	set_collection_scan_enabled: (enabled: boolean) => Promise<{ collectionScanEnabled: boolean }>;
 	set_accepted_classification_threshold: (value: number) => Promise<{ acceptedClassificationThreshold: number }>;
@@ -248,6 +250,16 @@ export class BackendApiClient {
 
 	public setCollectionDirectory(path: string): Promise<{ collectionDirectory: string }> {
 		return this.api.set_collection_directory(path);
+	}
+
+
+	public getCollectionViewPreferences(directory: string): Promise<{ preferences: Partial<CollectionViewPreferences> }> {
+		return this.api.get_collection_view_preferences(directory);
+	}
+
+
+	public setCollectionViewPreferences(directory: string, preferences: CollectionViewPreferences): Promise<{ status: string }> {
+		return this.api.set_collection_view_preferences(directory, preferences);
 	}
 
 

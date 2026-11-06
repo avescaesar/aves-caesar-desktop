@@ -200,5 +200,18 @@
 	"status.predicting": "Erkennung und Klassifizierung werden ausgeführt...",
 	"status.predictionFailed": "Die Vorhersage ist fehlgeschlagen.",
 	"status.selectImage": "Wählen Sie ein Bild aus, um zu beginnen.",
-	"status.selectImageBeforeGpx": "Wählen Sie ein Bild aus, bevor Sie GPX auswählen."
+	"status.selectImageBeforeGpx": "Wählen Sie ein Bild aus, bevor Sie GPX auswählen.",
+	"collection.confidenceMin": "Minimale Konfidenz",
+	"collection.confidenceMax": "Maximale Konfidenz",
+	"collection.sortByNameAsc": "Artname (A bis Z)",
+	"collection.sortByNameDesc": "Artname (Z bis A)",
+	"collection.sortByFamilyAsc": "Familie (A bis Z)",
+	"collection.sortByFamilyDesc": "Familie (Z bis A)",
+	"collection.sortByDateOldest": "Aufnahmedatum (älteste zuerst)",
+	"collection.sortByDateNewest": "Aufnahmedatum (neueste zuerst)",
+	"collection.sortByImagesMost": "Meiste Bilder",
+	"collection.sortByImagesLeast": "Wenigste Bilder",
+	"collection.sortByConfidenceLowHigh": "Konfidenz (niedrig bis hoch)",
+	"collection.sortByConfidenceHighLow": "Konfidenz (hoch bis niedrig)",
+	"correction.selectAlternative": "Diese Bestimmung verwenden"
 }

@@ -301,6 +301,27 @@ class BirdDesktopApi:
         return {"collectionDirectory": self._settings.collection_directory}
 
 
+    def get_collection_view_preferences(self, directory: str) -> dict[str, Any]:
+        key = self._collection_preferences_key(directory)
+        preferences = (self._settings.collection_view_preferences or {}).get(key, {})
+        return {"preferences": preferences}
+
+
+    def set_collection_view_preferences(self, directory: str, preferences: dict[str, Any]) -> dict[str, str]:
+        if not isinstance(preferences, dict):
+            raise ValueError("Collection view preferences must be an object.")
+
+        if self._settings.collection_view_preferences is None:
+            self._settings.collection_view_preferences = {}
+        self._settings.collection_view_preferences[self._collection_preferences_key(directory)] = preferences
+        self._settings.save()
+        return {"status": "saved"}
+
+
+    def _collection_preferences_key(self, directory: str) -> str:
+        return str(Path(str(directory or "").strip()).expanduser()).replace("\\", "/").rstrip("/").casefold()
+
+
     def set_collection_scan_mode(self, scan_mode: str) -> dict[str, str]:
         if scan_mode not in VALID_COLLECTION_SCAN_MODES:
             raise ValueError("Invalid collection scan mode.")

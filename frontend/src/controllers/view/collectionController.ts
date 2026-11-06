@@ -2,7 +2,7 @@ import { CollectionState } from "../../state/collectionState";
 import { DetectionState } from "../../state/detectionState";
 import { ImageViewportState } from "../../state/imageViewportState";
 import { SpeciesCorrectionState } from "../../state/speciesCorrectionState";
-import { ActiveView, type CollectionJobStatus, type CollectionScanMode } from "../../types";
+import { ActiveView, type CollectionJobStatus, type CollectionScanMode, type CollectionViewPreferences } from "../../types";
 import { delay, errorMessage } from "../../utils";
 import { openEbirdRecordExport } from "./ebirdExport";
 import type { AppControllerContext } from "../core/appControllerContext";
@@ -20,6 +20,10 @@ export class CollectionController implements ViewController {
 	private collectionRefreshRevision = 0;
 	private scanRequestRevision = 0;
 	private scanSettingRevision = 0;
+	private collectionPreferencesLoadedFor: string | null = null;
+	private pendingCollectionPreferences: { directory: string; preferences: CollectionViewPreferences } | null = null;
+	private collectionPreferencesSaveTimer: number | null = null;
+	private collectionPreferencesSaveQueue: Promise<void> = Promise.resolve();
 
 
 	public constructor(private readonly context: AppControllerContext, public readonly state: CollectionState, private readonly detectionState: DetectionState, private readonly speciesCorrectionState: SpeciesCorrectionState, private readonly imageViewportState: ImageViewportState, private readonly detectionController: DetectionController) {}
@@ -75,6 +79,7 @@ export class CollectionController implements ViewController {
 
 
 	public hide(): void {
+		this.flushCollectionPreferencesSave();
 		this.stopForNavigation();
 	}
 
@@ -91,6 +96,7 @@ export class CollectionController implements ViewController {
 		try {
 			const path = await this.context.apiClient.chooseDirectory();
 			if (path) {
+				this.flushCollectionPreferencesSave();
 				this.state.directory = path;
 				this.clearCollectionStatus();
 				this.collectionLoadedSignature = null;
@@ -332,6 +338,7 @@ export class CollectionController implements ViewController {
 		const selectionStart = input.selectionStart ?? input.value.length;
 		const selectionEnd = input.selectionEnd ?? selectionStart;
 		this.state.speciesSearchQuery = input.value;
+		this.persistCollectionPreferences(false);
 		this.context.render();
 		this.restoreCollectionSpeciesSearchFocus(selectionStart, selectionEnd);
 	}
@@ -351,16 +358,20 @@ export class CollectionController implements ViewController {
 			this.state.dateTo = target.value;
 		} else if (target.id === "collectionGpsFilter") {
 			this.state.gpsFilter = target.value === "withGps" || target.value === "withoutGps" ? target.value : "all";
-		} else if (target.id === "collectionConfidenceFilter") {
-			const value = target.value;
-			this.state.confidenceFilter = value === "manual" || value === "low" || value === "medium" || value === "high" ? value : "all";
+		} else if (target.id === "collectionConfidenceMin") {
+			this.state.confidenceMin = Math.min(100, Math.max(0, Number(target.value) || 0), this.state.confidenceMax);
+		} else if (target.id === "collectionConfidenceMax") {
+			this.state.confidenceMax = Math.max(0, Math.min(100, Number(target.value) || 0), this.state.confidenceMin);
+		} else if (target.id === "collectionManualOnly" && target instanceof HTMLInputElement) {
+			this.state.manualOnly = target.checked;
 		} else if (target.id === "collectionSpeciesSort") {
 			const value = target.value;
-			this.state.speciesSortOrder = value === "family" || value === "date" || value === "location" || value === "imageCount" || value === "confidence" ? value : "name";
+			this.state.speciesSortOrder = ["nameAsc", "nameDesc", "familyAsc", "familyDesc", "dateAsc", "dateDesc", "imageCountAsc", "imageCountDesc", "confidenceAsc", "confidenceDesc"].includes(value) ? value as CollectionViewPreferences["speciesSortOrder"] : "nameAsc";
 		} else {
 			return;
 		}
 
+		this.persistCollectionPreferences();
 		this.context.render();
 	}
 
@@ -394,6 +405,7 @@ export class CollectionController implements ViewController {
 			const speciesId = actionElement.dataset.speciesId;
 			if (speciesId) {
 				this.state.removeSpecies(speciesId);
+				this.persistCollectionPreferences();
 				this.context.render();
 			}
 			return;
@@ -408,6 +420,7 @@ export class CollectionController implements ViewController {
 			const imagePath = actionElement.dataset.imagePath;
 			if (imagePath) {
 				this.state.removeImage(imagePath);
+				this.persistCollectionPreferences();
 				this.context.render();
 			}
 			return;
@@ -420,6 +433,7 @@ export class CollectionController implements ViewController {
 			const occurrence = this.state.species().find(item => item.speciesId === speciesId)?.occurrences.find(item => item.imagePath === imagePath && item.birdIndex === birdIndex);
 			if (speciesId && occurrence) {
 				this.state.setKeyPhoto(speciesId, occurrence);
+				this.persistCollectionPreferences();
 				this.context.render();
 			}
 			return;
@@ -427,6 +441,7 @@ export class CollectionController implements ViewController {
 
 		if (actionElement.dataset.action === "restore-collection-items") {
 			this.state.restoreRemovedItems();
+			this.persistCollectionPreferences();
 			this.context.render();
 			return;
 		}
@@ -448,6 +463,7 @@ export class CollectionController implements ViewController {
 
 		if (actionElement.id === "removeSelectedSpecies") {
 			this.state.removeSelectedSpecies();
+			this.persistCollectionPreferences();
 			this.context.render();
 			return;
 		}
@@ -717,6 +733,10 @@ export class CollectionController implements ViewController {
 
 		this.collectionLoadingSignature = signature;
 		try {
+			await this.loadCollectionPreferences();
+			if (this.collectionSignature() !== signature) {
+				return;
+			}
 			const status = await this.withSpeciesNames(await this.context.apiClient.collectionIndex(this.state.directory, this.state.scanMode));
 			if (this.state.activeJobId) {
 				return;
@@ -736,6 +756,67 @@ export class CollectionController implements ViewController {
 				this.collectionLoadingSignature = null;
 			}
 		}
+	}
+
+
+	private async loadCollectionPreferences(): Promise<void> {
+		const directory = this.state.directory.trim();
+		const key = this.collectionPreferencesKey(directory);
+		if (!directory || key === this.collectionPreferencesLoadedFor) return;
+
+		try {
+			const result = await this.context.apiClient.getCollectionViewPreferences(directory);
+			if (this.state.directory.trim() !== directory) return;
+			this.state.restoreCollectionPreferences(result.preferences);
+		} catch (error) {
+			this.context.apiClient.logFrontendEvent("collection_preferences_load_failed", { error: errorMessage(error) });
+			this.state.restoreCollectionPreferences(null);
+		} finally {
+			if (this.state.directory.trim() === directory) this.collectionPreferencesLoadedFor = key;
+		}
+	}
+
+
+	private persistCollectionPreferences(immediate = true): void {
+		const directory = this.state.directory.trim();
+		if (!directory || this.collectionPreferencesKey(directory) !== this.collectionPreferencesLoadedFor) return;
+
+		this.pendingCollectionPreferences = { directory, preferences: this.state.collectionPreferences() };
+		if (this.collectionPreferencesSaveTimer !== null) {
+			window.clearTimeout(this.collectionPreferencesSaveTimer);
+			this.collectionPreferencesSaveTimer = null;
+		}
+		if (immediate) {
+			this.flushCollectionPreferencesSave();
+			return;
+		}
+
+		this.collectionPreferencesSaveTimer = window.setTimeout(() => {
+			this.collectionPreferencesSaveTimer = null;
+			this.flushCollectionPreferencesSave();
+		}, 250);
+	}
+
+
+	private flushCollectionPreferencesSave(): void {
+		if (this.collectionPreferencesSaveTimer !== null) {
+			window.clearTimeout(this.collectionPreferencesSaveTimer);
+			this.collectionPreferencesSaveTimer = null;
+		}
+		const pending = this.pendingCollectionPreferences;
+		this.pendingCollectionPreferences = null;
+		if (!pending) return;
+
+		this.collectionPreferencesSaveQueue = this.collectionPreferencesSaveQueue.then(async () => {
+			await this.context.apiClient.setCollectionViewPreferences(pending.directory, pending.preferences);
+		}).catch(error => {
+			this.context.apiClient.logFrontendEvent("collection_preferences_save_failed", { error: errorMessage(error) });
+		});
+	}
+
+
+	private collectionPreferencesKey(directory: string): string {
+		return directory.replace(/\\/g, "/").replace(/\/+$/, "").toLocaleLowerCase();
 	}
 
 

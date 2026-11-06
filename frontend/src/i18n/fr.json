@@ -200,5 +200,18 @@
 	"status.predicting": "Détection et classification en cours...",
 	"status.predictionFailed": "La prédiction a échoué.",
 	"status.selectImage": "Sélectionnez une image pour commencer.",
-	"status.selectImageBeforeGpx": "Choisissez une image avant de sélectionner un GPX."
+	"status.selectImageBeforeGpx": "Choisissez une image avant de sélectionner un GPX.",
+	"collection.confidenceMin": "Confiance minimale",
+	"collection.confidenceMax": "Confiance maximale",
+	"collection.sortByNameAsc": "Nom de l’espèce (A à Z)",
+	"collection.sortByNameDesc": "Nom de l’espèce (Z à A)",
+	"collection.sortByFamilyAsc": "Famille (A à Z)",
+	"collection.sortByFamilyDesc": "Famille (Z à A)",
+	"collection.sortByDateOldest": "Date de prise (plus ancienne d’abord)",
+	"collection.sortByDateNewest": "Date de prise (plus récente d’abord)",
+	"collection.sortByImagesMost": "Plus d’images",
+	"collection.sortByImagesLeast": "Moins d’images",
+	"collection.sortByConfidenceLowHigh": "Confiance (faible à élevée)",
+	"collection.sortByConfidenceHighLow": "Confiance (élevée à faible)",
+	"correction.selectAlternative": "Utiliser cette identification"
 }
