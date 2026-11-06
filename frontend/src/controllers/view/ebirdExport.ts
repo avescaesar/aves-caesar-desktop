@@ -93,6 +93,16 @@ function timeValue(value: string | null | undefined): string {
 	return match ? `${match[1]}:${match[2]}` : "";
 }
 
+function timeInMinutes(value: string | null | undefined): number | null {
+	const match = String(value ?? "").match(/^[\d:/-]+[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?/);
+	if (!match) return null;
+	const hours = Number(match[1]);
+	const minutes = Number(match[2]);
+	const seconds = Number(match[3] ?? "0");
+	if (hours > 23 || minutes > 59 || seconds > 59) return null;
+	return hours * 60 + minutes + seconds / 60;
+}
+
 function roundedCoordinate(value: number | null | undefined): string {
 	return typeof value === "number" && Number.isFinite(value) ? value.toFixed(2) : "";
 }
@@ -111,7 +121,7 @@ function speciesNames(item: CollectionSpecies): { commonName: string; genus: str
 }
 
 function draftChecklists(selected: CollectionSpecies[]): ChecklistDraft[] {
-	type ChecklistSeed = { date: string; locationKey: string; times: Set<string>; coordinates: Array<[number, number]>; observations: Map<string, ExportObservation>; photoBirds: Map<string, Map<string, Set<number>>> };
+	type ChecklistSeed = { date: string; locationKey: string; times: Set<string>; captureMinutes: number[]; coordinates: Array<[number, number]>; observations: Map<string, ExportObservation>; photoBirds: Map<string, Map<string, Set<number>>> };
 	const groups = new Map<string, ChecklistSeed>();
 	for (const item of selected) {
 		const names = speciesNames(item);
@@ -124,10 +134,12 @@ function draftChecklists(selected: CollectionSpecies[]): ChecklistDraft[] {
 			const key = `${date}\u0000${locationKey}`;
 			let group = groups.get(key);
 			if (!group) {
-				group = { date, locationKey, times: new Set<string>(), coordinates: [], observations: new Map<string, ExportObservation>(), photoBirds: new Map<string, Map<string, Set<number>>>() };
+				group = { date, locationKey, times: new Set<string>(), captureMinutes: [], coordinates: [], observations: new Map<string, ExportObservation>(), photoBirds: new Map<string, Map<string, Set<number>>>() };
 				groups.set(key, group);
 			}
 			if (time) group.times.add(time);
+			const capturedAtMinutes = timeInMinutes(occurrence.usedDatetime);
+			if (capturedAtMinutes !== null) group.captureMinutes.push(capturedAtMinutes);
 			if (locationKey && typeof occurrence.usedLatitude === "number" && typeof occurrence.usedLongitude === "number") {
 				group.coordinates.push([occurrence.usedLatitude, occurrence.usedLongitude]);
 			}
@@ -170,6 +182,7 @@ function draftChecklists(selected: CollectionSpecies[]): ChecklistDraft[] {
 			}
 		}
 		for (const time of group.times) known.times.add(time);
+		known.captureMinutes.push(...group.captureMinutes);
 		known.coordinates.push(...group.coordinates);
 		groups.delete(`${group.date}\u0000`);
 	}
@@ -181,6 +194,9 @@ function draftChecklists(selected: CollectionSpecies[]): ChecklistDraft[] {
 		}
 		const latitude = group.coordinates.length ? preciseCoordinate(group.coordinates.reduce((sum, point) => sum + point[0], 0) / group.coordinates.length) : "";
 		const longitude = group.coordinates.length ? preciseCoordinate(group.coordinates.reduce((sum, point) => sum + point[1], 0) / group.coordinates.length) : "";
+		const earliestCapture = group.captureMinutes.length ? Math.min(...group.captureMinutes) : null;
+		const latestCapture = group.captureMinutes.length ? Math.max(...group.captureMinutes) : null;
+		const elapsedMinutes = earliestCapture !== null && latestCapture !== null ? latestCapture - earliestCapture : null;
 		return {
 			date: group.date,
 			location: "",
@@ -192,7 +208,7 @@ function draftChecklists(selected: CollectionSpecies[]): ChecklistDraft[] {
 			country: "",
 			protocol: "Historical",
 			observers: "1",
-			duration: "",
+			duration: elapsedMinutes === null ? "" : String(elapsedMinutes > 0 ? Math.max(1, Math.round(elapsedMinutes)) : 0),
 			complete: "N",
 			distance: "",
 			area: "",
@@ -300,8 +316,8 @@ export function openEbirdRecordExport(selected: CollectionSpecies[]): void {
 	const backdrop = document.createElement("div");
 	backdrop.className = "modal-backdrop ebird-export-backdrop";
 	backdrop.innerHTML = `<section class="ebird-export-modal" role="dialog" aria-modal="true" aria-labelledby="ebirdExportTitle">
-		<header><div><h2 id="ebirdExportTitle">Export eBird Record Format</h2><p>Review the proposed checklists. Photos are not bird counts, so each species starts as X (present, count unknown).</p></div><button type="button" class="secondary-action" data-close-ebird>Close</button></header>
-		<div class="ebird-export-notice">Species counts are prefilled from detections in the selected photos. If a species appears in multiple photos in one checklist, the count uses the highest count from a single photo to reduce repeat counting; review and adjust the count as needed. Photos are separated into checklists by capture date and GPS cells rounded to 0.01°. Each cell is about 1.1 km north–south; east–west width varies with latitude. This is an automatic grouping aid, not eBird’s location boundary. Confirm each checklist represents one eBird location. The selected photos span ${new Set(selected.flatMap(item => item.occurrences.map(occurrence => dateValue(occurrence.usedDatetime)).filter(Boolean))).size || "unknown"} date(s) and ${new Set(selected.flatMap(item => item.occurrences.map(occurrence => {
+		<header><div><h2 id="ebirdExportTitle">Export eBird Record Format</h2><p>Review the proposed checklists and the counts filled from photo detections.</p></div><button type="button" class="secondary-action" data-close-ebird>Close</button></header>
+		<div class="ebird-export-notice">Species counts are prefilled from detections in the selected photos. If a species appears in multiple photos in one checklist, the count uses the highest count from a single photo to reduce repeat counting; review and adjust the count as needed. Duration (minutes) is prefilled from the first and last captured-photo times; review it if your birding period was longer or shorter. Photos are separated into checklists by capture date and GPS cells rounded to 0.01°. Each cell is about 1.1 km north–south; east–west width varies with latitude. This is an automatic grouping aid, not eBird’s location boundary. Confirm each checklist represents one eBird location. The selected photos span ${new Set(selected.flatMap(item => item.occurrences.map(occurrence => dateValue(occurrence.usedDatetime)).filter(Boolean))).size || "unknown"} date(s) and ${new Set(selected.flatMap(item => item.occurrences.map(occurrence => {
 			const latitude = roundedCoordinate(occurrence.usedLatitude);
 			const longitude = roundedCoordinate(occurrence.usedLongitude);
 			return latitude && longitude ? `${latitude},${longitude}` : "";
