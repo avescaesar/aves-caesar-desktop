@@ -36,6 +36,7 @@ export type BirdResult = {
 	box_confidence: number;
 	classification: Classification[];
 	manualCorrection?: ManualCorrection | null;
+	sourceBirdIndex?: number;
 };
 
 
@@ -61,6 +62,21 @@ export type AppLanguagePreference = AppLanguage | "system";
 
 
 export type CollectionScanMode = "raw" | "jpeg" | "raw_jpeg";
+
+export type CollectionViewPreferences = {
+	speciesSearchQuery: string;
+	familyFilter: string;
+	dateFrom: string;
+	dateTo: string;
+	gpsFilter: "all" | "withGps" | "withoutGps";
+	confidenceMin: number;
+	confidenceMax: number;
+	manualOnly: boolean;
+	speciesSortOrder: "nameAsc" | "nameDesc" | "familyAsc" | "familyDesc" | "dateAsc" | "dateDesc" | "imageCountAsc" | "imageCountDesc" | "confidenceAsc" | "confidenceDesc";
+	removedSpeciesIds: string[];
+	removedImagePaths: string[];
+	keyPhotos: Record<string, { imagePath: string; birdIndex: number }>;
+};
 
 
 export enum ActiveView {
@@ -192,6 +208,7 @@ export type BirdName = {
 	name: string;
 	name_language?: string;
 	name_lat: string;
+	family_name?: string;
 };
 
 
@@ -271,6 +288,7 @@ export type CollectionSpecies = {
 	name?: string;
 	name_language?: string;
 	name_lat?: string;
+	family_name?: string;
 	thumbnailDataUrl: string | null;
 	occurrenceCount: number;
 	imageCount: number;

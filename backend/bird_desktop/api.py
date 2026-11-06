@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import base64
 import json
+import re
+import shutil
 import subprocess
 import time
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 import webview
+from PIL import Image
 
 from .collection import CollectionJobs, CollectionStore
 from .data.bird_names import BirdNamesLoader
@@ -20,6 +24,7 @@ from .inference.corrections import ManualCorrectionStore
 from .inference.providers import ProviderSelection, RuntimeProbe, RuntimeResolution
 from .inference.services import PredictionService
 from .lightroom import LightroomBridgeServer, LightroomJobs, LightroomPluginManager, LightroomPredictionService
+from .media.exiftool import ExifTool
 from .media.image_io import ImageLoader
 from .organization import BatchJobs
 from .organization.services import BatchFileOrganizer
@@ -32,6 +37,46 @@ from .runtime.updates import UpdateService
 from .runtime.version import AppVersion
 from .runtime.worker_process import WorkerProcessCommand
 from .runtime.worker_lifecycle import workers
+
+
+MAX_EBIRD_PHOTO_BYTES = 9_500_000
+
+
+def _export_photo_as_jpeg(source: Path, destination: Path) -> bool:
+    """Export a compatible JPEG and keep it below eBird's 10 MB image limit."""
+    is_raw = ExifTool.is_raw_file(source)
+    is_jpeg = source.suffix.lower() in {".jpg", ".jpeg"}
+    if is_jpeg and not is_raw and source.stat().st_size <= MAX_EBIRD_PHOTO_BYTES:
+        shutil.copy2(source, destination)
+        return False
+
+    loaded = ImageLoader.load(source)
+    working = loaded.image.copy()
+    exif_data = loaded.image.info.get("exif")
+    quality = 95
+    try:
+        while True:
+            working.save(destination, format="JPEG", quality=quality, optimize=True, exif=exif_data or b"")
+            if is_raw:
+                ExifTool.copy_metadata(source, destination)
+            if destination.stat().st_size <= MAX_EBIRD_PHOTO_BYTES:
+                return True
+
+            if quality > 60:
+                quality -= 5
+                continue
+
+            width, height = working.size
+            if min(width, height) <= 320:
+                destination.unlink(missing_ok=True)
+                raise RuntimeError(f"Could not reduce {source.name} below the eBird photo size limit.")
+            resized = working.resize((max(1, int(width * 0.85)), max(1, int(height * 0.85))), Image.Resampling.LANCZOS)
+            working.close()
+            working = resized
+            quality = 90
+    finally:
+        working.close()
+        ImageLoader.cleanup(loaded)
 
 
 class BirdDesktopApi:
@@ -48,6 +93,9 @@ class BirdDesktopApi:
         self._batch_jobs = BatchJobs(self._runtime_probe)
         self._collection_jobs = CollectionJobs(self._runtime_probe)
         self._collection_store = CollectionStore()
+        self._ebird_export_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ebird-export")
+        self._ebird_export_lock = Lock()
+        self._ebird_export_jobs: dict[str, dict[str, Any]] = {}
         self._settings = UserSettings.load()
         self._logs = LogFiles()
         self._logs.prune_old_logs()
@@ -121,6 +169,118 @@ class BirdDesktopApi:
         return self._logs.export_to_desktop()
 
 
+    def start_ebird_package_export(self, csv_text: str, date: str, location: str, photos: list[dict[str, Any]]) -> dict[str, str] | None:
+        window = webview.windows[0]
+        paths = window.create_file_dialog(webview.FileDialog.FOLDER, allow_multiple=False)
+        if not paths:
+            return None
+
+        parent = Path(paths if isinstance(paths, str) else paths[0])
+        job_id = str(uuid.uuid4())
+        total = sum(len(species.get("imagePaths", [])) for species in photos if isinstance(species, dict))
+        with self._ebird_export_lock:
+            self._ebird_export_jobs[job_id] = {
+                "state": "running", "progress": 0, "processed": 0, "total": total,
+                "current": "Preparing export folder...",
+            }
+        self._ebird_export_executor.submit(self._run_ebird_package_export, job_id, parent, csv_text, date, location, photos)
+        return {"jobId": job_id}
+
+
+    def ebird_export_status(self, job_id: str) -> dict[str, Any]:
+        with self._ebird_export_lock:
+            status = self._ebird_export_jobs.get(str(job_id))
+            return dict(status) if status else {"state": "missing", "progress": 0, "processed": 0, "total": 0, "current": "Export job not found"}
+
+
+    def _update_ebird_export_progress(self, job_id: str, processed: int, total: int, current: str) -> None:
+        with self._ebird_export_lock:
+            status = self._ebird_export_jobs.get(job_id)
+            if status:
+                status.update({"processed": processed, "total": total, "progress": int(processed * 100 / total) if total else 0, "current": current})
+
+
+    def _run_ebird_package_export(self, job_id: str, parent: Path, csv_text: str, date: str, location: str, photos: list[dict[str, Any]]) -> None:
+        try:
+            result = self._write_ebird_package(parent, csv_text, date, location, photos, job_id)
+        except Exception as exc:
+            with self._ebird_export_lock:
+                status = self._ebird_export_jobs.get(job_id)
+                if status:
+                    status.update({"state": "error", "error": str(exc), "current": "Export failed"})
+        else:
+            with self._ebird_export_lock:
+                status = self._ebird_export_jobs.get(job_id)
+                if status:
+                    status.update({"state": "done", "progress": 100, "result": result, "current": "Export complete"})
+
+
+    def _write_ebird_package(self, parent: Path, csv_text: str, date: str, location: str, photos: list[dict[str, Any]], job_id: str) -> dict[str, Any]:
+        def safe_name(value: str, fallback: str) -> str:
+            cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", str(value)).strip(" ._")
+            return cleaned[:100] or fallback
+
+        folder_name = f"{safe_name(date, 'unknown-date')}_{safe_name(location, 'birding-location')}"
+        output_directory = parent / folder_name
+        suffix = 2
+        while output_directory.exists():
+            output_directory = parent / f"{folder_name} ({suffix})"
+            suffix += 1
+
+        output_directory.mkdir(parents=True)
+        (output_directory / "aves-caesar-ebird-records.csv").write_text(str(csv_text), encoding="utf-8", newline="")
+        exported_photos = 0
+        converted_photos = 0
+        total = sum(len(species.get("imagePaths", [])) for species in photos if isinstance(species, dict))
+        processed = 0
+        self._update_ebird_export_progress(job_id, processed, total, "Preparing photos...")
+        for species in photos if isinstance(photos, list) else []:
+            if not isinstance(species, dict):
+                continue
+            species_name = safe_name(str(species.get("name", "")), "unknown-species")
+            species_directory = output_directory / species_name
+            copied_names: set[str] = set()
+            for raw_path in species.get("imagePaths", []):
+                source = Path(str(raw_path))
+                if not source.is_file():
+                    processed += 1
+                    self._update_ebird_export_progress(job_id, processed, total, f"Skipping missing photo: {source.name}")
+                    continue
+                keep_jpeg = source.suffix.lower() in {".jpg", ".jpeg"} and source.stat().st_size <= MAX_EBIRD_PHOTO_BYTES and not ExifTool.is_raw_file(source)
+                destination_name = source.name if keep_jpeg else f"{source.stem}.jpg"
+                stem, extension = Path(destination_name).stem, Path(destination_name).suffix
+                duplicate_index = 2
+                while destination_name.casefold() in copied_names:
+                    destination_name = f"{stem} ({duplicate_index}){extension}"
+                    duplicate_index += 1
+                copied_names.add(destination_name.casefold())
+                species_directory.mkdir(parents=True, exist_ok=True)
+                destination = species_directory / destination_name
+                converted_photos += int(_export_photo_as_jpeg(source, destination))
+                exported_photos += 1
+                processed += 1
+                self._update_ebird_export_progress(job_id, processed, total, f"Exported {source.name}")
+
+        return {"path": str(output_directory), "photoCount": exported_photos, "convertedPhotoCount": converted_photos}
+
+
+    def save_ebird_csv(self, csv_text: str) -> dict[str, str] | None:
+        window = webview.windows[0]
+        paths = window.create_file_dialog(
+            webview.FileDialog.SAVE,
+            save_filename="aves-caesar-ebird-records.csv",
+            file_types=("CSV files (*.csv)",),
+        )
+        if not paths:
+            return None
+
+        output_path = Path(paths if isinstance(paths, str) else paths[0])
+        if output_path.suffix.lower() != ".csv":
+            output_path = output_path.with_suffix(".csv")
+        output_path.write_text(str(csv_text), encoding="utf-8", newline="")
+        return {"path": str(output_path)}
+
+
     def set_batch_directories(self, source_directory: str, destination_directory: str) -> dict[str, str]:
         self._settings.batch_source_directory = source_directory
         self._settings.batch_destination_directory = destination_directory
@@ -139,6 +299,27 @@ class BirdDesktopApi:
         self._settings.collection_directory = path
         self._settings.save()
         return {"collectionDirectory": self._settings.collection_directory}
+
+
+    def get_collection_view_preferences(self, directory: str) -> dict[str, Any]:
+        key = self._collection_preferences_key(directory)
+        preferences = (self._settings.collection_view_preferences or {}).get(key, {})
+        return {"preferences": preferences}
+
+
+    def set_collection_view_preferences(self, directory: str, preferences: dict[str, Any]) -> dict[str, str]:
+        if not isinstance(preferences, dict):
+            raise ValueError("Collection view preferences must be an object.")
+
+        if self._settings.collection_view_preferences is None:
+            self._settings.collection_view_preferences = {}
+        self._settings.collection_view_preferences[self._collection_preferences_key(directory)] = preferences
+        self._settings.save()
+        return {"status": "saved"}
+
+
+    def _collection_preferences_key(self, directory: str) -> str:
+        return str(Path(str(directory or "").strip()).expanduser()).replace("\\", "/").rstrip("/").casefold()
 
 
     def set_collection_scan_mode(self, scan_mode: str) -> dict[str, str]:

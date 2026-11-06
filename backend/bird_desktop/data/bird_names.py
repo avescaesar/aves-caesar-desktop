@@ -15,6 +15,7 @@ class BirdNames:
     name_lat: str
     name: str
     language: str = DEFAULT_LANGUAGE
+    family_name: str = ""
 
 
     def localized(self) -> str:
@@ -109,4 +110,5 @@ class BirdNamesLoader:
 
         scientific_name = str(record.get("scientific_name") or species_id).strip()
         localized_name = str(record.get(localized_key) or record.get("name_en") or scientific_name).strip()
-        names[species_id] = BirdNames(name_lat=scientific_name, name=localized_name, language=language)
+        family_name = str(record.get("family_name") or "").strip()
+        names[species_id] = BirdNames(name_lat=scientific_name, name=localized_name, language=language, family_name=family_name)

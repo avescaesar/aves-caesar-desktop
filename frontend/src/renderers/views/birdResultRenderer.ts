@@ -44,6 +44,7 @@ export class BirdResultRenderer {
 
 
 	private renderBirdCard(bird: BirdResult, birdIndex: number): string {
+		const sourceBirdIndex = bird.sourceBirdIndex ?? birdIndex;
 		const best = bird.classification[0];
 		const bestName = best ? this.classificationDisplayName(best) : this.context.text("common.unknown");
 		const latinName = best?.name_lat ? `<em>${escapeHtml(best.name_lat)}</em>` : "";
@@ -51,13 +52,13 @@ export class BirdResultRenderer {
 		const isManualCorrection = Boolean(bird.manualCorrection);
 		const matchClass = `primary-match${bestConfidence < this.settings.acceptedClassificationThreshold && !isManualCorrection ? " is-unsure" : ""}${isManualCorrection ? " is-manual-correction" : ""}`;
 		return `
-			<details class="detection-card" data-bird-index="${birdIndex}" open>
+			<details class="detection-card" data-bird-index="${birdIndex}" data-source-bird-index="${sourceBirdIndex}" open>
 				<summary>
 					<h3>${this.context.text("detection.birdDetection", { index: birdIndex + 1 })}</h3>
 					<span class="collapse-chevron">${iconChevronDown()}</span>
 				</summary>
 				<div class="detection-card__content">
-					<div class="match-label primary-match-label"><span>${this.context.text("detection.primaryMatch")}</span>${this.renderCorrectionEditButton(birdIndex)}</div>
+					<div class="match-label primary-match-label"><span>${this.context.text("detection.primaryMatch")}</span>${this.renderCorrectionEditButton(sourceBirdIndex)}</div>
 					<div class="${matchClass}">
 					<div>
 						<strong>${escapeHtml(bestName)}</strong>
@@ -91,7 +92,7 @@ export class BirdResultRenderer {
 			return "";
 		}
 
-		const rows = items.slice(0, 3).map(item => `<div class="alternate-row"><div><strong>${escapeHtml(this.classificationDisplayName(item))}</strong>${this.renderLatinName(item)}</div><span>${formatPercentWhole(item.confidence)}</span></div>`);
+		const rows = items.slice(0, 3).map(item => `<button class="alternate-row" data-action="select-alternate-correction" data-species-id="${escapeHtml(item.species_id)}" type="button" title="${escapeHtml(this.context.text("correction.selectAlternative"))}"><span class="alternate-row__name"><strong>${escapeHtml(this.classificationDisplayName(item))}</strong>${this.renderLatinName(item)}</span><span class="alternate-row__confidence">${formatPercentWhole(item.confidence)}</span></button>`);
 		return `
 		<div class="match-label">${this.context.text("detection.alternates")}</div>
 		<div class="alternates">${rows.join("")}</div>

@@ -288,7 +288,7 @@ export class ModalRenderer {
 			return "";
 		}
 
-		const bird = this.states.detection.result?.birds[birdIndex] ?? null;
+		const bird = this.states.detection.result?.birds.find((item, index) => (item.sourceBirdIndex ?? index) === birdIndex) ?? null;
 		const title = this.context.text("correction.edit");
 		return `
 		<div class="modal-backdrop">
