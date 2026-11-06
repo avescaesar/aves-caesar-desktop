@@ -192,6 +192,7 @@ export type BirdName = {
 	name: string;
 	name_language?: string;
 	name_lat: string;
+	family_name?: string;
 };
 
 
@@ -271,6 +272,7 @@ export type CollectionSpecies = {
 	name?: string;
 	name_language?: string;
 	name_lat?: string;
+	family_name?: string;
 	thumbnailDataUrl: string | null;
 	occurrenceCount: number;
 	imageCount: number;

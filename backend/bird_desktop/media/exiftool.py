@@ -121,3 +121,20 @@ class ExifTool:
 
         record = records[0]
         return record if isinstance(record, dict) else {}
+
+
+    @classmethod
+    def copy_metadata(cls, source: Path, destination: Path) -> None:
+        exiftool = cls.find()
+        if not exiftool:
+            raise RuntimeError("ExifTool is required to preserve metadata in exported RAW photos.")
+
+        result = subprocess.run(
+            [exiftool, "-overwrite_original", "-TagsFromFile", str(source), "-all:all", str(destination)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            **WorkerProcessCommand.hidden_window_options(),
+        )
+        if result.returncode != 0:
+            raise RuntimeError("ExifTool could not copy metadata to the exported JPEG.")

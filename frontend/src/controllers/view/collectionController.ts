@@ -4,6 +4,7 @@ import { ImageViewportState } from "../../state/imageViewportState";
 import { SpeciesCorrectionState } from "../../state/speciesCorrectionState";
 import { ActiveView, type CollectionJobStatus, type CollectionScanMode } from "../../types";
 import { delay, errorMessage } from "../../utils";
+import { openEbirdRecordExport } from "./ebirdExport";
 import type { AppControllerContext } from "../core/appControllerContext";
 import type { DetectionController, PredictionCorrectionResult } from "./detectionController";
 import type { EventBinder } from "../core/eventBinder";
@@ -11,6 +12,8 @@ import type { ViewController } from "./viewController";
 
 export class CollectionController implements ViewController {
 	public readonly view = ActiveView.Collection;
+	private collectionSelectionDrag: { startX: number; startY: number; currentX: number; currentY: number; grid: HTMLElement; additive: boolean; moved: boolean; marquee: HTMLElement | null } | null = null;
+	private suppressSelectionClick = false;
 	private collectionJobThreshold: number | null = null;
 	private collectionLoadedSignature: string | null = null;
 	private collectionLoadingSignature: string | null = null;
@@ -24,8 +27,14 @@ export class CollectionController implements ViewController {
 
 	public bindEvents(bindEvent: EventBinder): void {
 		bindEvent(document.querySelector<HTMLInputElement>("#collectionSpeciesSearch"), "input", event => this.updateCollectionSpeciesSearch(event));
+		bindEvent(document.querySelector<HTMLElement>(".collection-view"), "change", event => this.updateCollectionFilters(event));
 		bindEvent(document.querySelector<HTMLSelectElement>("#collectionScanMode"), "change", event => void this.changeCollectionScanMode(event));
 		bindEvent(document.querySelector<HTMLElement>(".collection-view"), "click", event => this.handleCollectionClick(event));
+		bindEvent(document.querySelector<HTMLElement>(".collection-view"), "pointerdown", event => this.beginCollectionSelection(event as PointerEvent));
+		bindEvent(document, "pointermove", event => this.updateCollectionSelection(event as PointerEvent));
+		bindEvent(document, "pointerup", event => this.finishCollectionSelection(event as PointerEvent));
+		bindEvent(document, "pointercancel", event => this.cancelCollectionSelection(event as PointerEvent));
+		bindEvent(document, "click", event => this.suppressPostDragClick(event), { capture: true });
 	}
 
 
@@ -328,13 +337,41 @@ export class CollectionController implements ViewController {
 	}
 
 
+	private updateCollectionFilters(event: Event): void {
+		const target = event.target;
+		if (!(target instanceof HTMLSelectElement || target instanceof HTMLInputElement)) {
+			return;
+		}
+
+		if (target.id === "collectionFamilyFilter") {
+			this.state.familyFilter = target.value;
+		} else if (target.id === "collectionDateFrom") {
+			this.state.dateFrom = target.value;
+		} else if (target.id === "collectionDateTo") {
+			this.state.dateTo = target.value;
+		} else if (target.id === "collectionGpsFilter") {
+			this.state.gpsFilter = target.value === "withGps" || target.value === "withoutGps" ? target.value : "all";
+		} else if (target.id === "collectionConfidenceFilter") {
+			const value = target.value;
+			this.state.confidenceFilter = value === "manual" || value === "low" || value === "medium" || value === "high" ? value : "all";
+		} else if (target.id === "collectionSpeciesSort") {
+			const value = target.value;
+			this.state.speciesSortOrder = value === "family" || value === "date" || value === "location" || value === "imageCount" || value === "confidence" ? value : "name";
+		} else {
+			return;
+		}
+
+		this.context.render();
+	}
+
+
 	private handleCollectionClick(event: Event): void {
 		const target = event.target;
 		if (!(target instanceof Element)) {
 			return;
 		}
 
-		const actionElement = target.closest<HTMLElement>("[data-action], #chooseCollectionDirectory, #scanCollection, #stopCollectionScan, #backToCollectionSpecies, #backToCollectionOccurrences, #previousCollectionOccurrence, #nextCollectionOccurrence, #revealCollectionOccurrence");
+		const actionElement = target.closest<HTMLElement>("[data-action], #chooseCollectionDirectory, #scanCollection, #stopCollectionScan, #backToCollectionSpecies, #backToCollectionOccurrences, #previousCollectionOccurrence, #nextCollectionOccurrence, #revealCollectionOccurrence, #exportEbirdRecords, #removeSelectedSpecies");
 		if (!actionElement) {
 			return;
 		}
@@ -344,8 +381,53 @@ export class CollectionController implements ViewController {
 			return;
 		}
 
+		if (actionElement.dataset.action === "toggle-ebird-species") {
+			const speciesId = actionElement.dataset.speciesId;
+			if (speciesId) {
+				this.state.toggleSpeciesExportSelection(speciesId);
+				this.context.render();
+			}
+			return;
+		}
+
+		if (actionElement.dataset.action === "remove-collection-species") {
+			const speciesId = actionElement.dataset.speciesId;
+			if (speciesId) {
+				this.state.removeSpecies(speciesId);
+				this.context.render();
+			}
+			return;
+		}
+
 		if (actionElement.dataset.action === "select-collection-occurrence") {
 			void this.selectCollectionOccurrence(actionElement);
+			return;
+		}
+
+		if (actionElement.dataset.action === "remove-collection-image") {
+			const imagePath = actionElement.dataset.imagePath;
+			if (imagePath) {
+				this.state.removeImage(imagePath);
+				this.context.render();
+			}
+			return;
+		}
+
+		if (actionElement.dataset.action === "set-collection-key-photo") {
+			const speciesId = actionElement.dataset.speciesId;
+			const imagePath = actionElement.dataset.imagePath;
+			const birdIndex = Number(actionElement.dataset.birdIndex);
+			const occurrence = this.state.species().find(item => item.speciesId === speciesId)?.occurrences.find(item => item.imagePath === imagePath && item.birdIndex === birdIndex);
+			if (speciesId && occurrence) {
+				this.state.setKeyPhoto(speciesId, occurrence);
+				this.context.render();
+			}
+			return;
+		}
+
+		if (actionElement.dataset.action === "restore-collection-items") {
+			this.state.restoreRemovedItems();
+			this.context.render();
 			return;
 		}
 
@@ -356,6 +438,17 @@ export class CollectionController implements ViewController {
 
 		if (actionElement.id === "scanCollection") {
 			void this.runCollectionScan();
+			return;
+		}
+
+		if (actionElement.id === "exportEbirdRecords") {
+			openEbirdRecordExport(this.state.selectedExportSpecies());
+			return;
+		}
+
+		if (actionElement.id === "removeSelectedSpecies") {
+			this.state.removeSelectedSpecies();
+			this.context.render();
 			return;
 		}
 
@@ -387,6 +480,95 @@ export class CollectionController implements ViewController {
 		if (actionElement.id === "revealCollectionOccurrence") {
 			void this.revealCollectionOccurrence();
 		}
+	}
+
+
+	private beginCollectionSelection(event: PointerEvent): void {
+		if (event.pointerType !== "mouse" || event.button !== 0 || !(event.target instanceof Element)) {
+			return;
+		}
+
+		const list = event.target.closest<HTMLElement>(".collection-species-list");
+		const grid = list?.querySelector<HTMLElement>(".collection-grid");
+		if (!list || !grid || event.target.closest(".collection-species-filters, .collection-export-select, .collection-remove-button, input, select, textarea, a")) {
+			return;
+		}
+
+		this.collectionSelectionDrag = {
+			startX: event.clientX,
+			startY: event.clientY,
+			currentX: event.clientX,
+			currentY: event.clientY,
+			grid,
+			additive: event.ctrlKey || event.metaKey || event.shiftKey,
+			moved: false,
+			marquee: null,
+		};
+	}
+
+
+	private updateCollectionSelection(event: PointerEvent): void {
+		const drag = this.collectionSelectionDrag;
+		if (!drag) return;
+		drag.currentX = event.clientX;
+		drag.currentY = event.clientY;
+		if (!drag.moved && Math.hypot(drag.currentX - drag.startX, drag.currentY - drag.startY) < 5) return;
+
+		if (!drag.moved) {
+			drag.moved = true;
+			drag.marquee = document.createElement("div");
+			drag.marquee.className = "collection-selection-marquee";
+			document.body.append(drag.marquee);
+			document.querySelector(".collection-view")?.classList.add("is-selecting-species");
+		}
+
+		event.preventDefault();
+		const left = Math.min(drag.startX, drag.currentX);
+		const top = Math.min(drag.startY, drag.currentY);
+		const width = Math.abs(drag.currentX - drag.startX);
+		const height = Math.abs(drag.currentY - drag.startY);
+		Object.assign(drag.marquee!.style, { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` });
+	}
+
+
+	private finishCollectionSelection(event: PointerEvent): void {
+		const drag = this.collectionSelectionDrag;
+		if (!drag) return;
+		if (drag.moved) {
+			this.updateCollectionSelection(event);
+			const selection = { left: Math.min(drag.startX, drag.currentX), right: Math.max(drag.startX, drag.currentX), top: Math.min(drag.startY, drag.currentY), bottom: Math.max(drag.startY, drag.currentY) };
+			if (!drag.additive) this.state.clearSpeciesExportSelection();
+			drag.grid.querySelectorAll<HTMLElement>(".collection-species-card[data-species-id]").forEach(card => {
+				const bounds = card.getBoundingClientRect();
+				if (bounds.right >= selection.left && bounds.left <= selection.right && bounds.bottom >= selection.top && bounds.top <= selection.bottom) {
+					const speciesId = card.dataset.speciesId;
+					if (speciesId) this.state.selectedSpeciesIds.add(speciesId);
+				}
+			});
+			this.suppressSelectionClick = true;
+			window.setTimeout(() => { this.suppressSelectionClick = false; }, 0);
+			this.context.render();
+		}
+		this.clearCollectionSelectionDrag();
+	}
+
+
+	private cancelCollectionSelection(event: PointerEvent): void {
+		if (this.collectionSelectionDrag) this.clearCollectionSelectionDrag();
+	}
+
+
+	private clearCollectionSelectionDrag(): void {
+		this.collectionSelectionDrag?.marquee?.remove();
+		this.collectionSelectionDrag = null;
+		document.querySelector(".collection-view")?.classList.remove("is-selecting-species");
+	}
+
+
+	private suppressPostDragClick(event: Event): void {
+		if (!this.suppressSelectionClick || !(event.target instanceof Element) || !event.target.closest(".collection-view")) return;
+		event.preventDefault();
+		event.stopPropagation();
 	}
 
 
@@ -579,6 +761,7 @@ export class CollectionController implements ViewController {
 					name: names?.name ?? species.name,
 					name_language: names?.name_language ?? species.name_language,
 					name_lat: names?.name_lat ?? species.name_lat,
+					family_name: names?.family_name ?? species.family_name,
 					occurrences: species.occurrences.map(occurrence => {
 						const occurrenceNames = birdNamesBySpecies.get(occurrence.classification.species_id);
 						return {

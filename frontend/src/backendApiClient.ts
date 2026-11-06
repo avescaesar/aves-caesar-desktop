@@ -25,6 +25,9 @@ type PywebviewBackendApi = {
 	clear_prediction_correction: (imagePath: string, birdIndex: number) => Promise<{ imagePath: string; birdIndex: number }>;
 	log_frontend_event?: (event: string, payload: Record<string, unknown>) => Promise<{ path: string }>;
 	export_logs: () => Promise<ExportLogsResponse>;
+	start_ebird_package_export: (csvText: string, date: string, location: string, photos: Array<{ name: string; imagePaths: string[] }>) => Promise<{ jobId: string } | null>;
+	ebird_export_status: (jobId: string) => Promise<{ state: "running" | "done" | "error" | "missing"; progress: number; processed: number; total: number; current: string; result?: { path: string; photoCount: number; convertedPhotoCount: number }; error?: string }>;
+	save_ebird_csv: (csvText: string) => Promise<{ path: string } | null>;
 	lightroom_info: () => Promise<LightroomInfo>;
 	install_lightroom_plugin: () => Promise<LightroomInfo>;
 	uninstall_lightroom_plugin: () => Promise<LightroomInfo>;
@@ -65,6 +68,21 @@ export class BackendApiClient {
 
 	public chooseDirectory(): Promise<string | null> {
 		return this.api.choose_directory();
+	}
+
+
+	public startEbirdPackageExport(csvText: string, date: string, location: string, photos: Array<{ name: string; imagePaths: string[] }>): Promise<{ jobId: string } | null> {
+		return this.api.start_ebird_package_export(csvText, date, location, photos);
+	}
+
+
+	public ebirdExportStatus(jobId: string): ReturnType<PywebviewBackendApi["ebird_export_status"]> {
+		return this.api.ebird_export_status(jobId);
+	}
+
+
+	public saveEbirdCsv(csvText: string): Promise<{ path: string } | null> {
+		return this.api.save_ebird_csv(csvText);
 	}
 
 

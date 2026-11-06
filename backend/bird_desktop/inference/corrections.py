@@ -21,7 +21,7 @@ class ManualCorrectionStore:
 
     def bird_names(self, language: str = "en") -> list[dict[str, str]]:
         names_by_species = self._names.all(language)
-        options = [{"species_id": species_id, "name": names.localized(), "name_language": names.language, "name_lat": names.name_lat} for species_id, names in names_by_species.items()]
+        options = [{"species_id": species_id, "name": names.localized(), "name_language": names.language, "name_lat": names.name_lat, "family_name": names.family_name} for species_id, names in names_by_species.items()]
         return sorted(options, key=lambda item: ((item.get("name") or item["species_id"]).casefold(), item["species_id"].casefold()))
 
 
